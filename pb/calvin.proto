@@ -1,0 +1,75 @@
+/*
+ * Copyright 2019 Marco Helmich
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+syntax = "proto3";
+
+package pb;
+
+// raft proto also pulls this in
+// make sure we import it the same way as raft does
+import "gogoproto/gogo.proto";
+import "go.etcd.io/etcd/raft/raftpb/raft.proto";
+
+option (gogoproto.marshaler_all) = true;
+option (gogoproto.sizer_all) = true;
+option (gogoproto.unmarshaler_all) = true;
+option (gogoproto.goproto_getters_all) = false;
+option (gogoproto.goproto_enum_prefix_all) = false;
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR TRANSACTIONS
+
+message Transaction {
+  // keys of the data objects that are being accessed
+  repeated bytes write_set = 10;
+  repeated bytes read_set = 11;
+  repeated bytes read_write_set = 12;
+
+  // ids of the nodes that are being contacted
+  repeated int64 reader_nodes = 20;
+  repeated int64 writer_nodes = 21;
+
+  // the stored procedure that's being invoked
+  string stored_procedure = 30;
+  bytes stored_procedure_args = 31;
+}
+
+message TransactionBatch {
+  repeated Transaction transactions = 1;
+}
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR THE RAFT TRANSPORT
+
+service RaftTransportService {
+  rpc Step(stream StepReq) returns (stream StepResp) {}
+}
+
+message StepReq {
+  int64 RaftNodeId = 1;
+  raftpb.Message Message = 2;
+}
+
+message StepResp {
+  string Error = 1;
+}
+
+message Id128 {
+  uint64 Upper = 1;
+  uint64 Lower = 2;
+}

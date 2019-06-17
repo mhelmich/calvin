@@ -27,7 +27,7 @@ func TestSequencerBasic(t *testing.T) {
 	writerTxns, readerTxns, err := NewSequencer()
 	assert.Nil(t, err)
 
-	time.Sleep(10000)
+	time.Sleep(1000 * time.Millisecond)
 
 	close(readerTxns)
 	close(writerTxns)

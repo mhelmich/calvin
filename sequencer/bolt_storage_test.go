@@ -30,6 +30,7 @@ func TestBoltStorageBasic(t *testing.T) {
 	dir := "./test-TestBoltStorageBasic-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	hardState, confState, err := store.InitialState()
 	assert.Nil(t, err)
@@ -37,13 +38,13 @@ func TestBoltStorageBasic(t *testing.T) {
 	assert.NotNil(t, confState)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestBoltStorageSaveSnapshot(t *testing.T) {
 	dir := "./test-TestBoltStorageSaveSnapshot-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	snap, err := store.Snapshot()
 	assert.Nil(t, err)
@@ -69,13 +70,13 @@ func TestBoltStorageSaveSnapshot(t *testing.T) {
 	assert.Equal(t, snapToWrite.Metadata.Term, snap2.Metadata.Term)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestBoltStorageFunWithEntries(t *testing.T) {
 	dir := "./test-TestBoltStorageFunWithEntries-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	count := 97
 	entsToStore := make([]raftpb.Entry, count)
@@ -146,13 +147,13 @@ func TestBoltStorageFunWithEntries(t *testing.T) {
 	assert.Equal(t, uint64(39), ents[2].Index)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestBoltStorageNoKeysFound(t *testing.T) {
 	dir := "./test-TestBoltStorageNoKeysFound-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	first, err := store.FirstIndex()
 	assert.Nil(t, err)
@@ -162,7 +163,6 @@ func TestBoltStorageNoKeysFound(t *testing.T) {
 	assert.Equal(t, uint64(0), last)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestBoltStorageExistingDB(t *testing.T) {
@@ -173,12 +173,12 @@ func TestBoltStorageExistingDB(t *testing.T) {
 
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	b = storageExists(dir)
 	assert.True(t, b)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestDropOldSnapshots(t *testing.T) {
@@ -186,6 +186,7 @@ func TestDropOldSnapshots(t *testing.T) {
 	dir := "./test-TestDropOldSnapshots-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	numSnapshotsToCreate := 47
 	snapshotIndexes := make([]int, numSnapshotsToCreate)
@@ -218,7 +219,6 @@ func TestDropOldSnapshots(t *testing.T) {
 	assert.Equal(t, 11, numItems)
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func TestDropOldLogEntries(t *testing.T) {
@@ -226,6 +226,7 @@ func TestDropOldLogEntries(t *testing.T) {
 	dir := "./test-TestDropOldLogEntries-" + uint64ToString(randomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
+	defer os.RemoveAll(dir)
 
 	numEntriesToCreate := 1111
 	startIndex := 123
@@ -262,7 +263,6 @@ func TestDropOldLogEntries(t *testing.T) {
 	assert.Equal(t, 0, len(entries))
 
 	store.close()
-	os.RemoveAll(dir)
 }
 
 func makeRandomSnapshot(index int) raftpb.Snapshot {

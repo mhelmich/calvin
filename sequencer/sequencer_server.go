@@ -22,6 +22,7 @@ import (
 	"net"
 
 	"github.com/mhelmich/calvin/pb"
+	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
 )
 
@@ -65,4 +66,12 @@ func (ss *sequencerServer) Step(stream pb.RaftTransportService_StepServer) error
 
 		stream.Send(&pb.StepResp{})
 	}
+}
+
+func (ss *sequencerServer) sendMessages(msgs []raftpb.Message) *messageSendingResults {
+	var results *messageSendingResults
+
+	for _, msg := range msgs {
+	}
+	return results
 }

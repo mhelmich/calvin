@@ -17,14 +17,43 @@
 package sequencer
 
 import (
+	"encoding/hex"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/mhelmich/calvin/interfaces"
+	"github.com/mhelmich/calvin/mocks"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
 func TestSequencerBasic(t *testing.T) {
-	writerTxns, readerTxns, err := NewSequencer()
+	newRaftID := randomRaftId()
+	logger := log.WithFields(log.Fields{
+		"component": "blot_store",
+		"raftIdHex": hex.EncodeToString(uint64ToBytes(newRaftID)),
+		"raftId":    uint64ToString(newRaftID),
+	})
+
+	storeDir := "./raft-" + uint64ToString(newRaftID) + "/"
+	// startFromExistingState := storageExists(storeDir)
+	bs, err := openBoltStorage(storeDir, logger)
+	assert.Nil(t, err)
+
+	defer os.RemoveAll(storeDir)
+
+	mockClient := new(mocks.RaftMessageClient)
+	mockClient.On("SendMessages", mock.Anything).Return(&interfaces.RaftMessageSendingResults{})
+
+	config := SequencerConfig{
+		newRaftID:         newRaftID,
+		localRaftStore:    bs,
+		raftMessageClient: mockClient,
+	}
+
+	writerTxns, readerTxns, err := NewSequencer(config)
 	assert.Nil(t, err)
 
 	time.Sleep(1000 * time.Millisecond)

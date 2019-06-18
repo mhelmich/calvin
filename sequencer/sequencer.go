@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"time"
 
+	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
@@ -30,38 +31,38 @@ const (
 	sequencerBatchFrequencyMs = 10
 )
 
-func NewSequencer() (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
+type SequencerConfig struct {
+	newRaftID         uint64
+	localRaftStore    localRaftStore
+	raftMessageClient interfaces.RaftMessageClient
+	logger            *log.Entry
+}
+
+func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
 	writerChan := make(chan *pb.Transaction)
 	readerChan := make(chan *pb.Transaction)
 
-	newRaftId := randomRaftId()
-	logger := log.WithFields(log.Fields{
-		"component": "sequencer",
-		"raftIdHex": hex.EncodeToString(uint64ToBytes(newRaftId)),
-		"raftId":    uint64ToString(newRaftId),
-	})
-
-	storeDir := "./" + "raft-" + uint64ToString(newRaftId) + "/"
-	// startFromExistingState := storageExists(storeDir)
-	bs, err := openBoltStorage(storeDir, logger)
-	if err != nil {
-		logger.Errorf("Can't open data store: %s", err.Error())
-		return nil, nil, err
+	if config.logger == nil {
+		config.logger = log.WithFields(log.Fields{
+			"component": "sequencer",
+			"raftIdHex": hex.EncodeToString(uint64ToBytes(config.newRaftID)),
+			"raftId":    uint64ToString(config.newRaftID),
+		})
 	}
 
 	c := &raft.Config{
-		ID:              newRaftId,
+		ID:              config.newRaftID,
 		ElectionTick:    5,
 		HeartbeatTick:   3,
-		Storage:         bs,
+		Storage:         config.localRaftStore,
 		MaxSizePerMsg:   1024 * 1024 * 1024, // 1 GB (!!!)
 		MaxInflightMsgs: 256,
-		Logger:          logger,
+		Logger:          config.logger,
 	}
 
 	raftPeers := make([]raft.Peer, 1)
 	raftPeers[0] = raft.Peer{
-		ID:      newRaftId,
+		ID:      config.newRaftID,
 		Context: []byte("narf"),
 	}
 
@@ -70,13 +71,14 @@ func NewSequencer() (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
 		return nil, nil, err
 	}
 
-	s := &Sequencer{
-		raftId:     newRaftId,
-		writerChan: writerChan,
-		readerChan: readerChan,
-		raftNode:   n,
-		store:      bs,
-		logger:     logger,
+	s := &sequencer{
+		raftId:            config.newRaftID,
+		writerChan:        writerChan,
+		readerChan:        readerChan,
+		raftNode:          n,
+		localRaftStore:    config.localRaftStore,
+		raftMessageClient: config.raftMessageClient,
+		logger:            config.logger,
 	}
 
 	go s.runReader()
@@ -84,18 +86,18 @@ func NewSequencer() (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
 	return writerChan, readerChan, nil
 }
 
-type Sequencer struct {
-	raftId     uint64
-	writerChan <-chan *pb.Transaction
-	readerChan <-chan *pb.Transaction
-	raftNode   *raft.RawNode
-	store      store // the raft data store
-	transport  raftTransport
-	logger     *log.Entry
+type sequencer struct {
+	raftId            uint64
+	writerChan        <-chan *pb.Transaction
+	readerChan        <-chan *pb.Transaction
+	raftNode          *raft.RawNode
+	localRaftStore    localRaftStore // the raft data store
+	raftMessageClient interfaces.RaftMessageClient
+	logger            *log.Entry
 }
 
 // transactions and distributed snapshot reads go here
-func (s *Sequencer) runWriter() {
+func (s *sequencer) runWriter() {
 	batch := &pb.TransactionBatch{}
 	raftTicker := time.NewTicker(10 * time.Millisecond)
 	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
@@ -142,12 +144,12 @@ func (s *Sequencer) runWriter() {
 	}
 }
 
-func (s *Sequencer) processReady(rd raft.Ready) {
+func (s *sequencer) processReady(rd raft.Ready) {
 	s.logger.Debugf("ID: %d %x Hardstate: %v Entries: %v Snapshot: %v Messages: %v Committed: %v", s.raftId, s.raftId, rd.HardState, rd.Entries, rd.Snapshot, rd.Messages, rd.CommittedEntries)
-	s.store.saveEntriesAndState(rd.Entries, rd.HardState)
+	s.localRaftStore.saveEntriesAndState(rd.Entries, rd.HardState)
 
 	if !raft.IsEmptySnap(rd.Snapshot) {
-		if err := s.store.saveSnap(rd.Snapshot); err != nil {
+		if err := s.localRaftStore.saveSnap(rd.Snapshot); err != nil {
 			s.logger.Errorf("Couldn't save snapshot: %s", err.Error())
 			return
 		}
@@ -155,9 +157,9 @@ func (s *Sequencer) processReady(rd raft.Ready) {
 		s.publishSnapshot(rd.Snapshot)
 	}
 
-	sendingErrors := s.transport.sendMessages(rd.Messages)
+	sendingErrors := s.raftMessageClient.SendMessages(rd.Messages)
 	if sendingErrors != nil {
-		for _, failedMsg := range sendingErrors.failedMessages {
+		for _, failedMsg := range sendingErrors.FailedMessages {
 			// TODO - think this through
 			// rb.logger.Errorf("Reporting raft [%d %x] unreachable", failedMsg.To, failedMsg.To)
 			// rb.raftNode.ReportUnreachable(failedMsg.To)
@@ -167,17 +169,17 @@ func (s *Sequencer) processReady(rd raft.Ready) {
 			}
 		}
 
-		for _, snapMsg := range sendingErrors.succeededSnapshotMessages {
+		for _, snapMsg := range sendingErrors.SucceededSnapshotMessages {
 			s.raftNode.ReportSnapshot(snapMsg.To, raft.SnapshotFinish)
 		}
 	}
 }
 
-func (s *Sequencer) publishSnapshot(snap raftpb.Snapshot) {
+func (s *sequencer) publishSnapshot(snap raftpb.Snapshot) {
 }
 
 // low-isolation reads and single partition snapshot reads go here
-func (s *Sequencer) runReader() {
+func (s *sequencer) runReader() {
 	for {
 		select {
 		case txn := <-s.readerChan:

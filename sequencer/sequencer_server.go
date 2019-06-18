@@ -21,7 +21,9 @@ import (
 	"io"
 	"net"
 
+	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/pb"
+	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
 )
@@ -36,7 +38,7 @@ func newSequencerServer() (*sequencerServer, error) {
 
 	ss := &sequencerServer{
 		grpcServer:     grpc.NewServer(),
-		idsToRaftNodes: make(map[int64]*Sequencer),
+		idsToRaftNodes: make(map[int64]*sequencer),
 	}
 
 	pb.RegisterRaftTransportServiceServer(ss.grpcServer, ss)
@@ -46,7 +48,7 @@ func newSequencerServer() (*sequencerServer, error) {
 
 type sequencerServer struct {
 	grpcServer     *grpc.Server
-	idsToRaftNodes map[int64]*Sequencer
+	idsToRaftNodes map[int64]*sequencer
 }
 
 func (ss *sequencerServer) Step(stream pb.RaftTransportService_StepServer) error {
@@ -68,10 +70,11 @@ func (ss *sequencerServer) Step(stream pb.RaftTransportService_StepServer) error
 	}
 }
 
-func (ss *sequencerServer) sendMessages(msgs []raftpb.Message) *messageSendingResults {
-	var results *messageSendingResults
+func (ss *sequencerServer) sendMessages(msgs []raftpb.Message) *interfaces.RaftMessageSendingResults {
+	var results *interfaces.RaftMessageSendingResults
 
 	for _, msg := range msgs {
+		log.Infof("%s", msg.String())
 	}
 	return results
 }

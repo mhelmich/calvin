@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-package sequencer
+package interfaces
 
 import (
-	"go.etcd.io/etcd/raft"
+	"github.com/mhelmich/calvin/pb"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
-// Internal interface.
-type localRaftStore interface {
-	raft.Storage
-	saveConfigState(confState raftpb.ConfState) error
-	saveEntriesAndState(entries []raftpb.Entry, hardState raftpb.HardState) error
-	dropLogEntriesBeforeIndex(index uint64) error
-	saveSnap(snap raftpb.Snapshot) error
-	dropOldSnapshots(numberOfSnapshotsToKeep int) error
-	close()
+type RaftMessageClient interface {
+	SendMessages(msgs []raftpb.Message) *RaftMessageSendingResults
+}
+
+type RaftMessageServer interface {
+	Step(stream pb.RaftTransportService_StepServer) error
+}
+
+type RaftMessageSendingResults struct {
+	FailedMessages            []raftpb.Message
+	SucceededSnapshotMessages []raftpb.Message
 }

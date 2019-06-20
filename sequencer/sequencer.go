@@ -18,6 +18,7 @@ package sequencer
 
 import (
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/mhelmich/calvin/interfaces"
@@ -38,6 +39,35 @@ type SequencerConfig struct {
 	logger            *log.Entry
 }
 
+type sequencer struct {
+	raftId uint64
+	// Transaction channel for writers.
+	writerChan <-chan *pb.Transaction
+	// Transaction channel for readers.
+	readerChan <-chan *pb.Transaction
+	// The raft node.
+	raftNode *raft.RawNode
+	// The raft data store.
+	localRaftStore localRaftStore
+	// The client to all other rafts.
+	raftMessageClient interfaces.RaftMessageClient
+	// The last index that has been applied. It helps us figuring out which entries to publish.
+	appliedIndex uint64
+	// // The index of the latest snapshot. Used to compute when to cut the next snapshot.
+	// snapshotIndex uint64
+	// // The number of log entries after which we cut a snapshot.
+	// snapshotFrequency uint64
+	// // Defines the number of snapshots that Calvin keeps before deleting old ones.
+	// numberOfSnapshotsToKeep int
+	// This object describes the topology of the raft group this backend is part of
+	confState raftpb.ConfState
+	// Keeps track of the latest config change id. The next id is this id + 1.
+	// HACK - there's obviously a race condition around this considering that
+	// whatever id this raft node has, the leader in the group might have a higher one
+	latestConfChangeId uint64
+	logger             *log.Entry
+}
+
 func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
 	writerChan := make(chan *pb.Transaction)
 	readerChan := make(chan *pb.Transaction)
@@ -48,6 +78,10 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 			"raftIdHex": hex.EncodeToString(uint64ToBytes(config.newRaftID)),
 			"raftId":    uint64ToString(config.newRaftID),
 		})
+	}
+
+	if config.newRaftID == 0 || config.localRaftStore == nil || config.raftMessageClient == nil {
+		return nil, nil, fmt.Errorf("One mandatory config item is nil")
 	}
 
 	c := &raft.Config{
@@ -86,31 +120,19 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 	return writerChan, readerChan, nil
 }
 
-type sequencer struct {
-	raftId            uint64
-	writerChan        <-chan *pb.Transaction
-	readerChan        <-chan *pb.Transaction
-	raftNode          *raft.RawNode
-	localRaftStore    localRaftStore // the raft data store
-	raftMessageClient interfaces.RaftMessageClient
-	logger            *log.Entry
-}
-
 // transactions and distributed snapshot reads go here
 func (s *sequencer) runWriter() {
 	batch := &pb.TransactionBatch{}
-	raftTicker := time.NewTicker(10 * time.Millisecond)
+	raftTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
 	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
 	defer raftTicker.Stop()
 	defer batchTicker.Stop()
-
-	s.logger.Infof("Starting writer loop")
 
 	for {
 		select {
 		case txn := <-s.writerChan:
 			if txn == nil {
-				s.logger.Infof("Ending writer loop")
+				s.logger.Warningf("Ending writer loop")
 				return
 			}
 			batch.Transactions = append(batch.Transactions, txn)
@@ -119,14 +141,16 @@ func (s *sequencer) runWriter() {
 			s.raftNode.Tick()
 
 		case <-batchTicker.C:
-			bites, err := batch.Marshal()
-			if err != nil {
-				s.logger.Errorf("%s", err)
-			}
+			if len(batch.Transactions) > 0 {
+				bites, err := batch.Marshal()
+				if err != nil {
+					s.logger.Errorf("%s", err)
+				}
 
-			err = s.raftNode.Propose(bites)
-			if err != nil {
-				s.logger.Errorf("%s", err)
+				err = s.raftNode.Propose(bites)
+				if err != nil {
+					s.logger.Errorf("%s", err)
+				}
 			}
 
 			batch = &pb.TransactionBatch{}
@@ -135,10 +159,10 @@ func (s *sequencer) runWriter() {
 			if s.raftNode.HasReady() {
 				s.logger.Infof("Processing ready...")
 				rd := s.raftNode.Ready()
+				s.logger.Infof("%s", rd.String())
 				s.processReady(rd)
-				s.raftNode.Advance(rd)
 			} else {
-				time.Sleep(1 * time.Millisecond)
+				time.Sleep((sequencerBatchFrequencyMs / 10) * time.Millisecond)
 			}
 		}
 	}
@@ -153,8 +177,6 @@ func (s *sequencer) processReady(rd raft.Ready) {
 			s.logger.Errorf("Couldn't save snapshot: %s", err.Error())
 			return
 		}
-
-		s.publishSnapshot(rd.Snapshot)
 	}
 
 	sendingErrors := s.raftMessageClient.SendMessages(rd.Messages)
@@ -173,9 +195,44 @@ func (s *sequencer) processReady(rd raft.Ready) {
 			s.raftNode.ReportSnapshot(snapMsg.To, raft.SnapshotFinish)
 		}
 	}
+
+	s.publishEntries(s.entriesToApply(rd.CommittedEntries))
+	s.maybeTriggerSnapshot()
+	s.raftNode.Advance(rd)
 }
 
-func (s *sequencer) publishSnapshot(snap raftpb.Snapshot) {
+func (s *sequencer) publishEntries(ents []raftpb.Entry) {
+	for idx := range ents {
+		switch ents[idx].Type {
+		case raftpb.EntryNormal:
+		case raftpb.EntryConfChange:
+			var cc raftpb.ConfChange
+			cc.Unmarshal(ents[idx].Data)
+			s.logger.Infof("Publishing config change: [%s]", cc.String())
+			s.confState = *s.raftNode.ApplyConfChange(cc)
+			s.localRaftStore.saveConfigState(s.confState)
+			s.latestConfChangeId = cc.ID
+		}
+		s.appliedIndex = ents[idx].Index
+	}
+}
+
+func (s *sequencer) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {
+	if len(ents) == 0 {
+		return make([]raftpb.Entry, 0)
+	}
+
+	firstIdx := ents[0].Index
+	if firstIdx > s.appliedIndex+1 {
+		// if I'm getting invalid data, I'm shutting down
+		s.logger.Panicf("First index of committed entry [%d] should <= progress.appliedIndex[%d] !", firstIdx, s.appliedIndex)
+		return make([]raftpb.Entry, 0)
+	}
+
+	return ents
+}
+
+func (s *sequencer) maybeTriggerSnapshot() {
 }
 
 // low-isolation reads and single partition snapshot reads go here
@@ -184,6 +241,7 @@ func (s *sequencer) runReader() {
 		select {
 		case txn := <-s.readerChan:
 			if txn == nil {
+				s.logger.Warningf("Ending reader loop")
 				return
 			}
 		}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Marco Helmich
+ * Copyright 2019 Marco Helmich
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,41 +14,35 @@
  * limitations under the License.
  */
 
-package sequencer
+package scheduler
 
 import (
-	"os"
-	"sync"
-	"testing"
-	"time"
+	"fmt"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/mhelmich/calvin/pb"
 )
 
-func TestConversions(t *testing.T) {
-	i := randomRaftId()
-
-	bites := uint64ToBytes(i)
-	assert.Equal(t, i, bytesToUint64(bites))
-
-	str := uint64ToString(i)
-	assert.Equal(t, i, stringToUint64(str))
+type scheduler struct {
+	sequencerInput <-chan *pb.TransactionBatch
 }
 
-func sizeOfMap(m *sync.Map) int {
-	var i int
-	m.Range(func(key, value interface{}) bool {
-		i++
-		return true
-	})
+func NewScheduler(sequencerInput <-chan *pb.TransactionBatch) {
+	s := &scheduler{
+		sequencerInput: sequencerInput,
+	}
 
-	return i
+	go s.runSequencerLoop()
 }
 
-func removeAll(dir string) error {
-	defer func() {
-		time.Sleep(100 * time.Millisecond)
-		os.RemoveAll(dir)
-	}()
+func (s *scheduler) runSequencerLoop() {
+	for {
+		select {
+		case batch := <-s.sequencerInput:
+			fmt.Printf("%s", batch.String())
+		}
+	}
+}
+
+func (s *scheduler) RunLowIsolationReadRequest(req *pb.LowIsolationReadRequest) *pb.LowIsolationReadResponse {
 	return nil
 }

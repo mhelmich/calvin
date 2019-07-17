@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package sequencer
+package util
 
 import (
 	"crypto/rand"
@@ -24,28 +24,26 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-
-	"go.etcd.io/etcd/raft/raftpb"
 )
 
 // converts bytes to an unsinged 64 bit integer
-func bytesToUint64(b []byte) uint64 {
+func BytesToUint64(b []byte) uint64 {
 	return binary.BigEndian.Uint64(b)
 }
 
 // converts a uint64 to a byte slice
-func uint64ToBytes(u uint64) []byte {
+func Uint64ToBytes(u uint64) []byte {
 	buf := make([]byte, 8)
 	binary.BigEndian.PutUint64(buf, u)
 	return buf
 }
 
-func uint64ToBytesInto(u uint64, buf []byte) error {
+func Uint64ToBytesInto(u uint64, buf []byte) error {
 	binary.BigEndian.PutUint64(buf, u)
 	return nil
 }
 
-func uint64ToString(i uint64) string {
+func Uint64ToString(i uint64) string {
 	return strconv.FormatUint(i, 10)
 }
 
@@ -57,25 +55,21 @@ func stringToUint64(s string) uint64 {
 	return i
 }
 
-func isMsgSnap(m raftpb.Message) bool {
-	return m.Type == raftpb.MsgSnap
-}
-
-func randomRaftId() uint64 {
+func RandomRaftId() uint64 {
 	bites := make([]byte, 8)
 	_, err := rand.Read(bites)
 	if err != nil {
 		log.Panicf("Can't read from random: %s", err.Error())
 	}
-	return bytesToUint64(bites)
+	return BytesToUint64(bites)
 }
 
-func nowUnixUtc() uint64 {
+func NowUnixUtc() uint64 {
 	t := time.Now().UTC()
 	return uint64(t.Unix())*1000 + uint64(t.Nanosecond()/int(time.Millisecond))
 }
 
-func isSyncMapEmpty(m *sync.Map) bool {
+func IsSyncMapEmpty(m *sync.Map) bool {
 	isEmpty := true
 	m.Range(func(key, value interface{}) bool {
 		// if we ever execute this,

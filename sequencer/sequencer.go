@@ -23,6 +23,7 @@ import (
 
 	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -78,8 +79,8 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 	if config.logger == nil {
 		config.logger = log.WithFields(log.Fields{
 			"component": "sequencer",
-			"raftIdHex": hex.EncodeToString(uint64ToBytes(config.newRaftID)),
-			"raftId":    uint64ToString(config.newRaftID),
+			"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(config.newRaftID)),
+			"raftId":    util.Uint64ToString(config.newRaftID),
 		})
 	}
 
@@ -289,4 +290,8 @@ func (s *sequencer) publishTransactionBatch(entry raftpb.Entry) {
 
 func (s *sequencer) shutdown() {
 	close(s.schedulerChanOut)
+}
+
+func isMsgSnap(m raftpb.Message) bool {
+	return m.Type == raftpb.MsgSnap
 }

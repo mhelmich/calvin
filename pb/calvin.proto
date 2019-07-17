@@ -33,23 +33,63 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 ////////////////////////////////
 // SECTION FOR TRANSACTIONS
 
+message Id128 {
+  uint64 Upper = 1;
+  uint64 Lower = 2;
+}
+
 message Transaction {
+  Id128 id = 1;
   // keys of the data objects that are being accessed
-  repeated bytes write_set = 10;
-  repeated bytes read_set = 11;
-  repeated bytes read_write_set = 12;
+  repeated bytes write_set = 2;
+  repeated bytes read_set = 3;
+  repeated bytes read_write_set = 4;
 
   // ids of the nodes that are being contacted
-  repeated int64 reader_nodes = 20;
-  repeated int64 writer_nodes = 21;
+  repeated int64 reader_nodes = 5;
+  repeated int64 writer_nodes = 6;
 
   // the stored procedure that's being invoked
-  string stored_procedure = 30;
-  bytes stored_procedure_args = 31;
+  string stored_procedure = 7;
+  repeated bytes stored_procedure_args = 8;
 }
 
 message TransactionBatch {
   repeated Transaction transactions = 1;
+  uint64 Term = 2;
+  uint64 Index = 3;
+  uint64 NodeId = 4;
+}
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR SEQUENCER SERVICE
+
+message SequencerResponse {
+  string Error = 1;
+}
+
+service Sequencer {
+  rpc sequence(stream Transaction) returns (stream SequencerResponse) {}
+}
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR SCHEDULER SERVICE
+
+message LowIsolationReadRequest {
+  repeated bytes Keys = 1;
+}
+
+message LowIsolationReadResponse {
+  repeated bytes Keys = 1;
+  repeated bytes Values = 2;
+  uint64 Term = 3;
+  uint64 Index = 4;
+}
+
+service Scheduler {
+  rpc lowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
 }
 
 //////////////////////////////////////////
@@ -67,9 +107,4 @@ message StepReq {
 
 message StepResp {
   string Error = 1;
-}
-
-message Id128 {
-  uint64 Upper = 1;
-  uint64 Lower = 2;
 }

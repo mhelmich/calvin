@@ -23,6 +23,7 @@ import (
 
 	bolt "github.com/coreos/bbolt"
 	"github.com/gogo/protobuf/proto"
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -187,8 +188,8 @@ func (bs *boltStorage) loadConfState(tx *bolt.Tx) (*raftpb.ConfState, error) {
 // MaxSize limits the total size of the log entries returned, but
 // Entries returns at least one entry if any.
 func (bs *boltStorage) Entries(lo, hi, maxByteSize uint64) ([]raftpb.Entry, error) {
-	min := uint64ToBytes(lo)
-	max := uint64ToBytes(hi)
+	min := util.Uint64ToBytes(lo)
+	max := util.Uint64ToBytes(hi)
 	entries := make([]raftpb.Entry, hi-lo)
 
 	tx, err := bs.db.Begin(false)
@@ -238,7 +239,7 @@ func (bs *boltStorage) Term(i uint64) (uint64, error) {
 	}
 
 	defer tx.Rollback()
-	bites := tx.Bucket(entriesBucket).Get(uint64ToBytes(i))
+	bites := tx.Bucket(entriesBucket).Get(util.Uint64ToBytes(i))
 	if bites == nil || len(bites) == 0 {
 		// return 0, raft.ErrUnavailable
 		return 0, nil
@@ -269,7 +270,7 @@ func (bs *boltStorage) LastIndex() (uint64, error) {
 		return 0, nil
 	}
 
-	return bytesToUint64(last), nil
+	return util.BytesToUint64(last), nil
 }
 
 // FirstIndex returns the index of the first log entry that is
@@ -292,7 +293,7 @@ func (bs *boltStorage) FirstIndex() (uint64, error) {
 		return 1, nil
 	}
 
-	return bytesToUint64(first), nil
+	return util.BytesToUint64(first), nil
 }
 
 // Snapshot returns the most recent snapshot.
@@ -332,7 +333,7 @@ func (bs *boltStorage) saveEntriesAndState(entries []raftpb.Entry, hardState raf
 			return err2
 		}
 
-		err2 = b.Put(uint64ToBytes(e.Index), bites)
+		err2 = b.Put(util.Uint64ToBytes(e.Index), bites)
 		if err2 != nil {
 			return err2
 		}
@@ -340,7 +341,7 @@ func (bs *boltStorage) saveEntriesAndState(entries []raftpb.Entry, hardState raf
 
 	if len(entries) > 0 {
 		lastEntryIWrote := entries[len(entries)-1]
-		lastIndexIWrote := uint64ToBytes(lastEntryIWrote.Index)
+		lastIndexIWrote := util.Uint64ToBytes(lastEntryIWrote.Index)
 		c := tx1.Bucket(entriesBucket).Cursor()
 		k, _ := c.Last()
 		for ; k != nil && bytes.Compare(k, lastIndexIWrote) > 0; k, _ = c.Prev() {
@@ -395,7 +396,7 @@ func (bs *boltStorage) dropLogEntriesBeforeIndex(index uint64) error {
 	defer tx.Rollback()
 	c := tx.Bucket(entriesBucket).Cursor()
 	// find index
-	c.Seek(uint64ToBytes(index))
+	c.Seek(util.Uint64ToBytes(index))
 	// move to the previous key
 	// and start deleteing
 	key, _ = c.Prev()
@@ -403,7 +404,7 @@ func (bs *boltStorage) dropLogEntriesBeforeIndex(index uint64) error {
 	for key != nil {
 		err = c.Delete()
 		if err != nil {
-			bs.logger.Errorf("Couldn't delete key: %d", bytesToUint64(key))
+			bs.logger.Errorf("Couldn't delete key: %d", util.BytesToUint64(key))
 		}
 		key, _ = c.Prev()
 	}
@@ -434,7 +435,7 @@ func (bs *boltStorage) saveSnap(snap raftpb.Snapshot) error {
 		return err
 	}
 
-	err = tx.Bucket(snapshotsBucket).Put(uint64ToBytes(snap.Metadata.Index), bites)
+	err = tx.Bucket(snapshotsBucket).Put(util.Uint64ToBytes(snap.Metadata.Index), bites)
 	if err != nil {
 		return err
 	}
@@ -465,7 +466,7 @@ func (bs *boltStorage) dropOldSnapshots(numberOfSnapshotsToKeep int) error {
 	for k != nil {
 		err = c.Delete()
 		if err != nil {
-			bs.logger.Errorf("Can't delete key %d: %s", bytesToUint64(k), err.Error())
+			bs.logger.Errorf("Can't delete key %d: %s", util.BytesToUint64(k), err.Error())
 		}
 
 		k, _ = c.Prev()

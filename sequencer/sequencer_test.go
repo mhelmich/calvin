@@ -25,20 +25,21 @@ import (
 	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
 func TestSequencerBasic(t *testing.T) {
-	newRaftID := randomRaftId()
+	newRaftID := util.RandomRaftId()
 	logger := log.WithFields(log.Fields{
 		"component": "bolt_store",
-		"raftIdHex": hex.EncodeToString(uint64ToBytes(newRaftID)),
-		"raftId":    uint64ToString(newRaftID),
+		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(newRaftID)),
+		"raftId":    util.Uint64ToString(newRaftID),
 	})
 
-	storeDir := "./raft-" + uint64ToString(newRaftID) + "/"
+	storeDir := "./raft-" + util.Uint64ToString(newRaftID) + "/"
 	// startFromExistingState := storageExists(storeDir)
 	bs, err := openBoltStorage(storeDir, logger)
 	assert.Nil(t, err)

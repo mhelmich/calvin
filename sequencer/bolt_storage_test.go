@@ -21,13 +21,14 @@ import (
 	"os"
 	"testing"
 
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft/raftpb"
 )
 
 func TestBoltStorageBasic(t *testing.T) {
-	dir := "./test-TestBoltStorageBasic-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestBoltStorageBasic-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -41,7 +42,7 @@ func TestBoltStorageBasic(t *testing.T) {
 }
 
 func TestBoltStorageSaveSnapshot(t *testing.T) {
-	dir := "./test-TestBoltStorageSaveSnapshot-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestBoltStorageSaveSnapshot-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -73,7 +74,7 @@ func TestBoltStorageSaveSnapshot(t *testing.T) {
 }
 
 func TestBoltStorageFunWithEntries(t *testing.T) {
-	dir := "./test-TestBoltStorageFunWithEntries-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestBoltStorageFunWithEntries-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -150,7 +151,7 @@ func TestBoltStorageFunWithEntries(t *testing.T) {
 }
 
 func TestBoltStorageNoKeysFound(t *testing.T) {
-	dir := "./test-TestBoltStorageNoKeysFound-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestBoltStorageNoKeysFound-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -166,7 +167,7 @@ func TestBoltStorageNoKeysFound(t *testing.T) {
 }
 
 func TestBoltStorageExistingDB(t *testing.T) {
-	dir := "./test-TestBoltStorageExistingDB-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestBoltStorageExistingDB-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 
 	b := storageExists(dir)
 	assert.False(t, b)
@@ -183,7 +184,7 @@ func TestBoltStorageExistingDB(t *testing.T) {
 
 func TestDropOldSnapshots(t *testing.T) {
 	var err error
-	dir := "./test-TestDropOldSnapshots-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestDropOldSnapshots-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -223,7 +224,7 @@ func TestDropOldSnapshots(t *testing.T) {
 
 func TestDropOldLogEntries(t *testing.T) {
 	var err error
-	dir := "./test-TestDropOldLogEntries-" + uint64ToString(randomRaftId()) + "/"
+	dir := "./test-TestDropOldLogEntries-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	store, err := openBoltStorage(dir, log.WithFields(log.Fields{}))
 	assert.Nil(t, err)
 	defer os.RemoveAll(dir)
@@ -316,7 +317,7 @@ func areEntriesContiuous(bs *boltStorage) bool {
 	prevKey, _ = c.First()
 	for key != nil {
 		key, _ = c.Next()
-		if bytesToUint64(prevKey)+uint64(1) != bytesToUint64(key) {
+		if util.BytesToUint64(prevKey)+uint64(1) != util.BytesToUint64(key) {
 			return false
 		}
 		prevKey = key

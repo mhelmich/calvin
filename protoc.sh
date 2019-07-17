@@ -16,8 +16,7 @@
 
 protoc \
   -I=. \
-  -I=$GOPATH/src \
-  -I=$GOPATH/src/github.com/gogo/protobuf \
-  -I=$GOPATH/src/github.com/gogo/protobuf/protobuf \
-  --gogo_out=plugins=grpc:. \
+  -I=./vendor \
+  -I=./vendor/github.com/gogo/protobuf \
+  --gofast_out=plugins=grpc:. \
   pb/*.proto

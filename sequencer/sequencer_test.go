@@ -24,6 +24,7 @@ import (
 
 	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/mocks"
+	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -32,7 +33,7 @@ import (
 func TestSequencerBasic(t *testing.T) {
 	newRaftID := randomRaftId()
 	logger := log.WithFields(log.Fields{
-		"component": "blot_store",
+		"component": "bolt_store",
 		"raftIdHex": hex.EncodeToString(uint64ToBytes(newRaftID)),
 		"raftId":    uint64ToString(newRaftID),
 	})
@@ -53,10 +54,22 @@ func TestSequencerBasic(t *testing.T) {
 		raftMessageClient: mockClient,
 	}
 
-	writerTxns, readerTxns, err := NewSequencer(config)
+	writerTxns, readerTxns, schedulerChan, err := NewSequencer(config)
 	assert.Nil(t, err)
 
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(300 * time.Millisecond)
+
+	txn := &pb.Transaction{
+		WriterNodes: []int64{1, 2, 3, 4, 5, 6},
+	}
+	writerTxns <- txn
+
+	batch := <-schedulerChan
+	assert.Equal(t, len(batch.Transactions), 1)
+	assert.Equal(t, len(batch.Transactions[0].WriterNodes), 6)
+	assert.Equal(t, batch.Term, uint64(2))
+	assert.Equal(t, batch.Index, uint64(3))
+	assert.Equal(t, batch.NodeId, newRaftID)
 
 	close(readerTxns)
 	close(writerTxns)

@@ -42,9 +42,11 @@ type SequencerConfig struct {
 type sequencer struct {
 	raftId uint64
 	// Transaction channel for writers.
-	writerChan <-chan *pb.Transaction
+	writerChanIn <-chan *pb.Transaction
 	// Transaction channel for readers.
-	readerChan <-chan *pb.Transaction
+	readerChanIn <-chan *pb.Transaction
+	// TrancsactionBatch channel for schedulers
+	schedulerChanOut chan<- *pb.TransactionBatch
 	// The raft node.
 	raftNode *raft.RawNode
 	// The raft data store.
@@ -68,9 +70,10 @@ type sequencer struct {
 	logger             *log.Entry
 }
 
-func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, error) {
+func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, <-chan *pb.TransactionBatch, error) {
 	writerChan := make(chan *pb.Transaction)
 	readerChan := make(chan *pb.Transaction)
+	schedulerChan := make(chan *pb.TransactionBatch)
 
 	if config.logger == nil {
 		config.logger = log.WithFields(log.Fields{
@@ -81,13 +84,13 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 	}
 
 	if config.newRaftID == 0 || config.localRaftStore == nil || config.raftMessageClient == nil {
-		return nil, nil, fmt.Errorf("One mandatory config item is nil")
+		return nil, nil, nil, fmt.Errorf("One mandatory config item is nil")
 	}
 
 	c := &raft.Config{
 		ID:              config.newRaftID,
-		ElectionTick:    5,
-		HeartbeatTick:   3,
+		ElectionTick:    7,
+		HeartbeatTick:   5,
 		Storage:         config.localRaftStore,
 		MaxSizePerMsg:   1024 * 1024 * 1024, // 1 GB (!!!)
 		MaxInflightMsgs: 256,
@@ -102,13 +105,14 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 
 	n, err := raft.NewRawNode(c, raftPeers)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	s := &sequencer{
 		raftId:            config.newRaftID,
-		writerChan:        writerChan,
-		readerChan:        readerChan,
+		writerChanIn:      writerChan,
+		readerChanIn:      readerChan,
+		schedulerChanOut:  schedulerChan,
 		raftNode:          n,
 		localRaftStore:    config.localRaftStore,
 		raftMessageClient: config.raftMessageClient,
@@ -117,56 +121,14 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 
 	go s.runReader()
 	go s.runWriter()
-	return writerChan, readerChan, nil
+
+	// TODO: wait until node joined raft group and doesn't drop raft messages anymore
+	return writerChan, readerChan, schedulerChan, nil
 }
 
-// transactions and distributed snapshot reads go here
-func (s *sequencer) runWriter() {
-	batch := &pb.TransactionBatch{}
-	raftTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
-	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
-	defer raftTicker.Stop()
-	defer batchTicker.Stop()
-
-	for {
-		select {
-		case txn := <-s.writerChan:
-			if txn == nil {
-				s.logger.Warningf("Ending writer loop")
-				return
-			}
-			batch.Transactions = append(batch.Transactions, txn)
-
-		case <-raftTicker.C:
-			s.raftNode.Tick()
-
-		case <-batchTicker.C:
-			if len(batch.Transactions) > 0 {
-				bites, err := batch.Marshal()
-				if err != nil {
-					s.logger.Errorf("%s", err)
-				}
-
-				err = s.raftNode.Propose(bites)
-				if err != nil {
-					s.logger.Errorf("%s", err)
-				}
-			}
-
-			batch = &pb.TransactionBatch{}
-
-		default:
-			if s.raftNode.HasReady() {
-				s.logger.Infof("Processing ready...")
-				rd := s.raftNode.Ready()
-				s.logger.Infof("%s", rd.String())
-				s.processReady(rd)
-			} else {
-				time.Sleep((sequencerBatchFrequencyMs / 10) * time.Millisecond)
-			}
-		}
-	}
-}
+////////////////////////////////////////////////
+////////////////////////////////////////////////
+/////////////// RAFT CODE
 
 func (s *sequencer) processReady(rd raft.Ready) {
 	s.logger.Debugf("ID: %d %x Hardstate: %v Entries: %v Snapshot: %v Messages: %v Committed: %v", s.raftId, s.raftId, rd.HardState, rd.Entries, rd.Snapshot, rd.Messages, rd.CommittedEntries)
@@ -205,16 +167,22 @@ func (s *sequencer) publishEntries(ents []raftpb.Entry) {
 	for idx := range ents {
 		switch ents[idx].Type {
 		case raftpb.EntryNormal:
+			s.publishTransactionBatch(ents[idx])
+
 		case raftpb.EntryConfChange:
-			var cc raftpb.ConfChange
-			cc.Unmarshal(ents[idx].Data)
-			s.logger.Infof("Publishing config change: [%s]", cc.String())
-			s.confState = *s.raftNode.ApplyConfChange(cc)
-			s.localRaftStore.saveConfigState(s.confState)
-			s.latestConfChangeId = cc.ID
+			s.publishConfigChange(ents[idx])
 		}
 		s.appliedIndex = ents[idx].Index
 	}
+}
+
+func (s *sequencer) publishConfigChange(entry raftpb.Entry) {
+	var cc raftpb.ConfChange
+	cc.Unmarshal(entry.Data)
+	s.logger.Infof("Publishing config change: [%s]", cc.String())
+	s.confState = *s.raftNode.ApplyConfChange(cc)
+	s.localRaftStore.saveConfigState(s.confState)
+	s.latestConfChangeId = cc.ID
 }
 
 func (s *sequencer) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {
@@ -233,17 +201,92 @@ func (s *sequencer) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {
 }
 
 func (s *sequencer) maybeTriggerSnapshot() {
+	// triggering a snapshot means consistently capturing the
+	// log and the data file and bundelling all of that into a snapshot
 }
+
+////////////////////////////////////////////////
+////////////////////////////////////////////////
+/////////////// CALVIN CODE
 
 // low-isolation reads and single partition snapshot reads go here
 func (s *sequencer) runReader() {
 	for {
 		select {
-		case txn := <-s.readerChan:
+		case txn := <-s.readerChanIn:
 			if txn == nil {
 				s.logger.Warningf("Ending reader loop")
 				return
 			}
 		}
 	}
+}
+
+// transactions and distributed snapshot reads go here
+func (s *sequencer) runWriter() {
+	batch := &pb.TransactionBatch{}
+	raftTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
+	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
+	defer raftTicker.Stop()
+	defer batchTicker.Stop()
+
+	for {
+		select {
+		case txn := <-s.writerChanIn:
+			if txn == nil {
+				s.logger.Warningf("Ending writer loop")
+				s.shutdown()
+				return
+			}
+
+			batch.Transactions = append(batch.Transactions, txn)
+
+		case <-raftTicker.C:
+			s.raftNode.Tick()
+
+		case <-batchTicker.C:
+			if len(batch.Transactions) > 0 {
+				bites, err := batch.Marshal()
+				if err != nil {
+					s.logger.Errorf("%s", err)
+				}
+
+				err = s.raftNode.Propose(bites)
+				if err != nil {
+					s.logger.Errorf("%s", err)
+				}
+			}
+
+			batch = &pb.TransactionBatch{}
+
+		default:
+			if s.raftNode.HasReady() {
+				rd := s.raftNode.Ready()
+				s.processReady(rd)
+			} else {
+				time.Sleep((sequencerBatchFrequencyMs / 10) * time.Millisecond)
+			}
+		}
+	}
+}
+
+func (s *sequencer) publishTransactionBatch(entry raftpb.Entry) {
+	if len(entry.Data) <= 0 {
+		return
+	}
+
+	batch := &pb.TransactionBatch{}
+	err := batch.Unmarshal(entry.Data)
+	if err != nil {
+		s.logger.Panicf(err.Error())
+	}
+
+	batch.Term = entry.Term
+	batch.Index = entry.Index
+	batch.NodeId = s.raftId
+	s.schedulerChanOut <- batch
+}
+
+func (s *sequencer) shutdown() {
+	close(s.schedulerChanOut)
 }

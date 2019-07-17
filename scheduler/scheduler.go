@@ -20,24 +20,37 @@ import (
 	"fmt"
 
 	"github.com/mhelmich/calvin/pb"
+	log "github.com/sirupsen/logrus"
 )
 
-type scheduler struct {
-	sequencerInput <-chan *pb.TransactionBatch
+type SchedulerConfig struct {
+	SequencerChanIn <-chan *pb.TransactionBatch
+	Logger          *log.Entry
 }
 
-func NewScheduler(sequencerInput <-chan *pb.TransactionBatch) {
+type scheduler struct {
+	sequencerChanIn <-chan *pb.TransactionBatch
+	logger          *log.Entry
+}
+
+func NewScheduler(config *SchedulerConfig) *scheduler {
 	s := &scheduler{
-		sequencerInput: sequencerInput,
+		sequencerChanIn: config.SequencerChanIn,
+		logger:          config.Logger,
 	}
 
 	go s.runSequencerLoop()
+	return s
 }
 
 func (s *scheduler) runSequencerLoop() {
 	for {
 		select {
-		case batch := <-s.sequencerInput:
+		case batch := <-s.sequencerChanIn:
+			if batch == nil {
+				s.logger.Warningf("Ending scheduler loop")
+				return
+			}
 			fmt.Printf("%s", batch.String())
 		}
 	}

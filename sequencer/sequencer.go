@@ -30,11 +30,12 @@ import (
 )
 
 const (
-	sequencerBatchFrequencyMs = 10
+	sequencerBatchFrequencyMs = 100
 )
 
 type SequencerConfig struct {
 	newRaftID         uint64
+	totalServers      uint64
 	localRaftStore    localRaftStore
 	raftMessageClient interfaces.RaftMessageClient
 	logger            *log.Entry
@@ -42,6 +43,8 @@ type SequencerConfig struct {
 
 type sequencer struct {
 	raftId uint64
+	// HACK - this is here to give stable positions in my log
+	totalServers uint64
 	// Transaction channel for writers.
 	writerChanIn <-chan *pb.Transaction
 	// Transaction channel for readers.
@@ -111,6 +114,7 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 
 	s := &sequencer{
 		raftId:            config.newRaftID,
+		totalServers:      config.totalServers,
 		writerChanIn:      writerChan,
 		readerChanIn:      readerChan,
 		schedulerChanOut:  schedulerChan,
@@ -231,6 +235,8 @@ func (s *sequencer) runWriter() {
 	defer raftTicker.Stop()
 	defer batchTicker.Stop()
 
+	batchNumber := uint64(0)
+
 	for {
 		select {
 		case txn := <-s.writerChanIn:
@@ -246,16 +252,18 @@ func (s *sequencer) runWriter() {
 			s.raftNode.Tick()
 
 		case <-batchTicker.C:
-			if len(batch.Transactions) > 0 {
-				bites, err := batch.Marshal()
-				if err != nil {
-					s.logger.Errorf("%s", err)
-				}
+			bites, err := batch.Marshal()
+			if err != nil {
+				s.logger.Errorf("%s", err)
+			}
 
-				err = s.raftNode.Propose(bites)
-				if err != nil {
-					s.logger.Errorf("%s", err)
-				}
+			batch.Epoch = (s.totalServers * batchNumber) + s.raftId
+			batchNumber++
+			batch.NodeId = s.raftId
+
+			err = s.raftNode.Propose(bites)
+			if err != nil {
+				s.logger.Errorf("%s", err)
 			}
 
 			batch = &pb.TransactionBatch{}
@@ -282,9 +290,6 @@ func (s *sequencer) publishTransactionBatch(entry raftpb.Entry) {
 		s.logger.Panicf(err.Error())
 	}
 
-	batch.Term = entry.Term
-	batch.Index = entry.Index
-	batch.NodeId = s.raftId
 	s.schedulerChanOut <- batch
 }
 

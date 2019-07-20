@@ -56,26 +56,17 @@ message Transaction {
 
 message TransactionBatch {
   repeated Transaction transactions = 1;
-  uint64 Term = 2;
-  uint64 Index = 3;
-  uint64 NodeId = 4;
-}
-
-//////////////////////////////////////////
-////////////////////////////////
-// SECTION FOR SEQUENCER SERVICE
-
-message SequencerResponse {
-  string Error = 1;
-}
-
-service Sequencer {
-  rpc sequence(stream Transaction) returns (stream SequencerResponse) {}
+  uint64 Epoch = 2;
+  uint64 NodeId = 3;
 }
 
 //////////////////////////////////////////
 ////////////////////////////////
 // SECTION FOR SCHEDULER SERVICE
+
+message SchedulerResponse {
+  string Error = 1;
+}
 
 message LowIsolationReadRequest {
   repeated bytes Keys = 1;
@@ -89,6 +80,7 @@ message LowIsolationReadResponse {
 }
 
 service Scheduler {
+  rpc schedule(stream Transaction) returns (stream SchedulerResponse) {}
   rpc lowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
 }
 

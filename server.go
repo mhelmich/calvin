@@ -18,42 +18,31 @@ package calvin
 
 import (
 	"fmt"
-	"os"
+	"net"
 
-	"github.com/naoina/toml"
+	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/scheduler"
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
-type config struct {
-	Servers struct {
-		Self struct {
-			NodeID   uint64
-			Role     string
-			Hostname string
-			Port     int
-		}
-		NumberPrimaries uint64
-	}
+type server struct {
+	grpcServer *grpc.Server
+	logger     *log.Entry
 }
 
-func (c *config) String() string {
-	return fmt.Sprintf("NodeID: %d Role: %s NumberPrimaries: %d", c.Servers.Self.NodeID, c.Servers.Self.Role, c.Servers.NumberPrimaries)
-}
-
-func NewCalvin(configPath string) {
-	c := readConfig(configPath)
-	fmt.Printf(c.String())
-}
-
-func readConfig(path string) config {
-	f, err := os.Open(path)
+func newServer(hostname string, port int, logger *log.Entry) {
+	myAddress := fmt.Sprintf("%s:%d", hostname, port)
+	lis, err := net.Listen("tcp", myAddress)
 	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	var config config
-	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		panic(err)
+		logger.Panicf("failed to listen: %v", err)
 	}
 
-	return config
+	s := &server{
+		grpcServer: grpc.NewServer(),
+		logger:     logger,
+	}
+
+	pb.RegisterSchedulerServer(s.grpcServer, scheduler.NewServer())
+	go s.grpcServer.Serve(lis)
 }

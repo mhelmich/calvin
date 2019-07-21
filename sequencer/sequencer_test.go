@@ -35,7 +35,7 @@ func TestSequencerBasic(t *testing.T) {
 	// newRaftID := util.RandomRaftId()
 	newRaftID := uint64(1)
 	logger := log.WithFields(log.Fields{
-		"component": "bolt_store",
+		"component": "sequencer",
 		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(newRaftID)),
 		"raftId":    util.Uint64ToString(newRaftID),
 	})

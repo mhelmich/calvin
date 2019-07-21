@@ -14,35 +14,41 @@
  * limitations under the License.
  */
 
-package calvin
+package scheduler
 
 import (
-	"fmt"
-	"net"
-
 	"github.com/mhelmich/calvin/pb"
-	"github.com/mhelmich/calvin/scheduler"
-	log "github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
 )
 
-type server struct {
-	grpcServer *grpc.Server
-	logger     *log.Entry
+var transactionLog = &txnLog{
+	m: make(map[uint64]*pb.TransactionBatch),
 }
 
-func newServer(hostname string, port int, logger *log.Entry) {
-	myAddress := fmt.Sprintf("%s:%d", hostname, port)
-	lis, err := net.Listen("tcp", myAddress)
-	if err != nil {
-		logger.Panicf("failed to listen: %v", err)
+type txnLog struct {
+	m              map[uint64]*pb.TransactionBatch
+	lastCleanedIdx uint64
+}
+
+func (tl *txnLog) AddBatch(batch *pb.TransactionBatch) {
+	tl.m[batch.Epoch] = batch
+}
+
+func (tl *txnLog) GetIndex(idx uint64) *pb.TransactionBatch {
+	batch, ok := tl.m[idx]
+	if !ok {
+		return nil
 	}
 
-	s := &server{
-		grpcServer: grpc.NewServer(),
-		logger:     logger,
+	if tl.lastCleanedIdx+10 < idx {
+		go tl.cleanup(idx)
 	}
 
-	pb.RegisterSchedulerServer(s.grpcServer, scheduler.NewServer(logger))
-	go s.grpcServer.Serve(lis)
+	return batch
+}
+
+func (tl *txnLog) cleanup(idx uint64) {
+	for i := tl.lastCleanedIdx; i < idx; i++ {
+		delete(tl.m, i)
+	}
+	tl.lastCleanedIdx = idx
 }

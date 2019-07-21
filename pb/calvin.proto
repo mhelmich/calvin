@@ -80,7 +80,7 @@ message LowIsolationReadResponse {
 }
 
 service Scheduler {
-  rpc schedule(stream Transaction) returns (stream SchedulerResponse) {}
+  rpc schedule(stream TransactionBatch) returns (SchedulerResponse) {}
   rpc lowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
 }
 

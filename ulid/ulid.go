@@ -21,7 +21,7 @@
 // and
 // https://instagram-engineering.com/sharding-ids-at-instagram-1cf5a71e5a5c
 
-package util
+package ulid
 
 // An ULID is a 16 byte Universally Unique Lexicographically Sortable Identifier
 // 	The components are encoded as 16 octets.
@@ -59,6 +59,7 @@ import (
 	"fmt"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
 )
 
 const (
@@ -102,7 +103,7 @@ var dec = [...]byte{
 
 func NewId() (*ID, error) {
 	var id ID
-	now := NowUnixUtc()
+	now := util.NowUnixUtc()
 
 	id[0] = byte(now >> 40)
 	id[1] = byte(now >> 32)
@@ -123,12 +124,12 @@ func ParseId(bites []byte) (*ID, error) {
 		return &id, err
 	}
 
-	err = Uint64ToBytesInto(id128.Upper, id[:8])
+	err = util.Uint64ToBytesInto(id128.Upper, id[:8])
 	if err != nil {
 		return &id, err
 	}
 
-	err = Uint64ToBytesInto(id128.Lower, id[8:])
+	err = util.Uint64ToBytesInto(id128.Lower, id[8:])
 	if err != nil {
 		return &id, err
 	}
@@ -171,12 +172,12 @@ func ParseIdFromString(v string) (*ID, error) {
 
 func ParseIdFromProto(v *pb.Id128) (*ID, error) {
 	var id ID
-	err := Uint64ToBytesInto(v.Upper, id[:8])
+	err := util.Uint64ToBytesInto(v.Upper, id[:8])
 	if err != nil {
 		return &id, err
 	}
 
-	err = Uint64ToBytesInto(v.Lower, id[8:])
+	err = util.Uint64ToBytesInto(v.Lower, id[8:])
 	if err != nil {
 		return &id, err
 	}
@@ -226,17 +227,17 @@ func (id *ID) String() string {
 	return string(bites)
 }
 
-func (id *ID) toProto() *pb.Id128 {
+func (id *ID) ToProto() *pb.Id128 {
 	return &pb.Id128{
-		Upper: BytesToUint64(id[:8]),
-		Lower: BytesToUint64(id[8:]),
+		Upper: util.BytesToUint64(id[:8]),
+		Lower: util.BytesToUint64(id[8:]),
 	}
 }
 
-func (id *ID) toBytes() ([]byte, error) {
+func (id *ID) ToBytes() ([]byte, error) {
 	id128 := &pb.Id128{
-		Upper: BytesToUint64(id[:8]),
-		Lower: BytesToUint64(id[8:]),
+		Upper: util.BytesToUint64(id[:8]),
+		Lower: util.BytesToUint64(id[8:]),
 	}
 
 	return id128.Marshal()

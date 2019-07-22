@@ -39,11 +39,11 @@ func NewScheduler(config *SchedulerConfig) *scheduler {
 		logger:          config.Logger,
 	}
 
-	go s.runSequencerLoop()
+	go s.runLockManagerLoop()
 	return s
 }
 
-func (s *scheduler) runSequencerLoop() {
+func (s *scheduler) runLockManagerLoop() {
 	for {
 		select {
 		case batch := <-s.sequencerChanIn:

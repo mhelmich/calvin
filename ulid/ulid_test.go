@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-package util
+package ulid
 
 import (
 	"crypto/rand"
 	"testing"
 	"time"
 
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -28,7 +29,7 @@ import (
 func TestUlidBasic(t *testing.T) {
 	ulid1, err := NewId()
 	assert.Nil(t, err)
-	bites1, err := ulid1.toBytes()
+	bites1, err := ulid1.ToBytes()
 	assert.Nil(t, err)
 	ulid2, err := ParseId(bites1)
 	assert.Nil(t, err)
@@ -64,7 +65,7 @@ func TestUlidMap(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, ulid2.String(), str)
 
-	proto := ulid2.toProto()
+	proto := ulid2.ToProto()
 	ulid4, err := ParseIdFromProto(proto)
 	assert.Nil(t, err)
 	str, ok = m[*ulid4]
@@ -82,14 +83,14 @@ func TestUlidMap(t *testing.T) {
 func _TestUlidBitShifting(t *testing.T) {
 	buf := make([]uint8, 2)
 	rand.Reader.Read(buf)
-	now := NowUnixUtc()
-	nowB := Uint64ToBytes(now)
+	now := util.NowUnixUtc()
+	nowB := util.Uint64ToBytes(now)
 
 	log.Infof("%v", buf)
 	log.Infof("%v %d", nowB, now)
 	nowB[6] = buf[0]
 	nowB[7] = buf[1]
-	log.Infof("I want this: %v %d", nowB, BytesToUint64(nowB))
+	log.Infof("I want this: %v %d", nowB, util.BytesToUint64(nowB))
 
 	b6 := uint8(now >> 8)
 	b7 := uint8(now)
@@ -99,21 +100,21 @@ func _TestUlidBitShifting(t *testing.T) {
 		uint64(255)<<32 | uint64(255)<<40 | uint64(255)<<48 | uint64(255)<<56
 
 	cleanEnd := now & and
-	log.Infof("clean end: %v %d", Uint64ToBytes(cleanEnd), cleanEnd)
+	log.Infof("clean end: %v %d", util.Uint64ToBytes(cleanEnd), cleanEnd)
 
 	or := uint64(buf[1]) | uint64(buf[0])<<8 | uint64(0)<<16 | uint64(0)<<24 |
 		uint64(0)<<32 | uint64(0)<<40 | uint64(0)<<48 | uint64(0)<<56
 
 	whatIWant := cleanEnd | or
-	log.Infof("what I want: %v %d", Uint64ToBytes(whatIWant), whatIWant)
+	log.Infof("what I want: %v %d", util.Uint64ToBytes(whatIWant), whatIWant)
 }
 
 func _BenchmarkByteArrayShifting(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		buf := make([]uint8, 2)
 		rand.Reader.Read(buf)
-		now := NowUnixUtc()
-		nowB := Uint64ToBytes(now)
+		now := util.NowUnixUtc()
+		nowB := util.Uint64ToBytes(now)
 		nowB[6] = buf[0]
 		nowB[7] = buf[1]
 	}
@@ -123,7 +124,7 @@ func _BenchmarkBitShifting(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		buf := make([]uint8, 2)
 		rand.Reader.Read(buf)
-		now := NowUnixUtc()
+		now := util.NowUnixUtc()
 		// and := uint64(0) | uint64(0)<<8 | uint64(255)<<16 | uint64(255)<<24 |
 		// 	uint64(255)<<32 | uint64(255)<<40 | uint64(255)<<48 | uint64(255)<<56
 		// cleanEnd := now & and

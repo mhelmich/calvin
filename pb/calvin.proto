@@ -41,6 +41,7 @@ message Id128 {
 message Transaction {
   Id128 id = 1;
   // keys of the data objects that are being accessed
+  // do I need this at all if I have read_write_set?
   repeated bytes write_set = 2;
   repeated bytes read_set = 3;
   repeated bytes read_write_set = 4;

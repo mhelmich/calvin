@@ -31,8 +31,7 @@ func TestLockManagerBasic(t *testing.T) {
 	txnID, err := ulid.NewId()
 	assert.Nil(t, err)
 
-	readWriteSet := make([][]byte, 1)
-	readWriteSet[0] = key
+	readWriteSet := [][]byte{key}
 	txn := &pb.Transaction{
 		Id:           txnID.ToProto(),
 		ReadWriteSet: readWriteSet,
@@ -50,4 +49,164 @@ func TestLockManagerBasic(t *testing.T) {
 	requests, ok = lm.lockMap[keyHash]
 	assert.False(t, ok)
 	assert.Equal(t, 0, len(requests))
+}
+
+func TestLockManagerMultipleTxns(t *testing.T) {
+	lm := newLockManager()
+	key1 := []byte("key1")
+	key1Hash := lm.hash(key1)
+	key2 := []byte("key2")
+	key2Hash := lm.hash(key2)
+
+	txnID1, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn1 := &pb.Transaction{
+		Id:           txnID1.ToProto(),
+		ReadWriteSet: [][]byte{key1},
+		ReadSet:      [][]byte{key2},
+	}
+
+	txnID2, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn2 := &pb.Transaction{
+		Id:           txnID2.ToProto(),
+		ReadWriteSet: [][]byte{key2},
+		ReadSet:      [][]byte{key1},
+	}
+
+	lm.lock(txn1)
+	requests, ok := lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+
+	lm.lock(txn2)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+
+	lm.release(txn2)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+
+	lm.release(txn1)
+	requests, ok = lm.lockMap[key2Hash]
+	assert.False(t, ok)
+	assert.Equal(t, 0, len(requests))
+	requests, ok = lm.lockMap[key1Hash]
+	assert.False(t, ok)
+	assert.Equal(t, 0, len(requests))
+}
+
+func TestLockManagerSameTxnTwice(t *testing.T) {
+	lm := newLockManager()
+	key1 := []byte("key1")
+	key1Hash := lm.hash(key1)
+	key2 := []byte("key2")
+	key2Hash := lm.hash(key2)
+
+	txnID1, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn1 := &pb.Transaction{
+		Id:           txnID1.ToProto(),
+		ReadWriteSet: [][]byte{key1},
+		ReadSet:      [][]byte{key2},
+	}
+
+	lm.lock(txn1)
+	requests, ok := lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+
+	lm.lock(txn1)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+}
+
+func TestLockManagerTxnsReleaseMiddle(t *testing.T) {
+	lm := newLockManager()
+	key1 := []byte("key1")
+	key1Hash := lm.hash(key1)
+	key2 := []byte("key2")
+	key2Hash := lm.hash(key2)
+
+	txnID1, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn1 := &pb.Transaction{
+		Id:           txnID1.ToProto(),
+		ReadWriteSet: [][]byte{key1},
+		ReadSet:      [][]byte{key2},
+	}
+
+	txnID2, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn2 := &pb.Transaction{
+		Id:           txnID2.ToProto(),
+		ReadWriteSet: [][]byte{key2},
+		ReadSet:      [][]byte{key1},
+	}
+
+	txnID3, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn3 := &pb.Transaction{
+		Id:           txnID3.ToProto(),
+		ReadWriteSet: [][]byte{key2},
+		ReadSet:      [][]byte{key1},
+	}
+
+	lm.lock(txn1)
+	requests, ok := lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(requests))
+
+	lm.lock(txn2)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+
+	lm.lock(txn3)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 3, len(requests))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 3, len(requests))
+
+	lm.release(txn2)
+	requests, ok = lm.lockMap[key1Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+	id1, _ := ulid.ParseIdFromProto(requests[0].txn.Id)
+	assert.Equal(t, 0, txnID1.CompareTo(id1))
+	id2, _ := ulid.ParseIdFromProto(requests[1].txn.Id)
+	assert.Equal(t, 0, txnID3.CompareTo(id2))
+	requests, ok = lm.lockMap[key2Hash]
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(requests))
+	id1, _ = ulid.ParseIdFromProto(requests[0].txn.Id)
+	assert.Equal(t, 0, txnID1.CompareTo(id1))
+	id2, _ = ulid.ParseIdFromProto(requests[1].txn.Id)
+	assert.Equal(t, 0, txnID3.CompareTo(id2))
 }

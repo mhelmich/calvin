@@ -69,39 +69,64 @@ func (lm *lockManager) lock(txn *pb.Transaction) {
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
-	for i := 0; i < len(txn.ReadWriteSet); i++ {
-		key := txn.ReadWriteSet[i]
+	lm.innerLock(txn, write, txn.ReadWriteSet)
+
+	// lock read set
+	// lock locals
+	// double-check whether remote locks have been requested
+	// if not, request them
+	lm.innerLock(txn, read, txn.ReadSet)
+}
+
+func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byte) {
+	for i := 0; i < len(set); i++ {
+		key := set[i]
 		if lm.isKeyLocal(key) {
 			keyHash := lm.hash(key)
 			lockRequests, ok := lm.lockMap[keyHash]
 			if ok {
 				j := 0
 				for ; !bytes.Equal(key, lockRequests[j].key) && j < len(lockRequests); j++ {
+					// hash collision
 				}
 
 				if j >= len(lockRequests) {
 					// hash collision
 					req := lockRequest{
-						mode: write,
+						mode: mode,
 						txn:  txn,
 						key:  key,
 					}
 					lockRequests = append(lockRequests, req)
 					lm.lockMap[keyHash] = lockRequests
-				} else if lockRequests[j].txn != txn {
-					// somebody else got the lock before I did
+					return
+				}
+
+				txnID, _ := ulid.ParseIdFromProto(txn.Id)
+				for ; j < len(lockRequests); j++ {
+					id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
+					if txnID.CompareTo(id) == 0 {
+						// it seems I requested the lock already
+						return
+					}
+				}
+
+				if j >= len(lockRequests) {
+					// I didn't request this lock yet, so adding my request
 					req := lockRequest{
-						mode: write,
+						mode: mode,
 						txn:  txn,
 						key:  key,
 					}
 					lockRequests = append(lockRequests, req)
 					lm.lockMap[keyHash] = lockRequests
 				}
+
 			} else {
 				// no entry in lock request map for this key
+				// I will be the first one ... yay
 				req := lockRequest{
-					mode: write,
+					mode: mode,
 					txn:  txn,
 					key:  key,
 				}
@@ -110,42 +135,33 @@ func (lm *lockManager) lock(txn *pb.Transaction) {
 			}
 		}
 	}
-
-	// lock read set
-	// lock locals
-	// double-check whether remote locks have been requested
-	// if not, request them
-	for i := 0; i < len(txn.ReadSet); i++ {
-	}
-}
-
-func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequest {
-	if idx == 0 {
-		return lockRequests[1:]
-	} else if idx == len(lockRequests)-1 {
-		return lockRequests[:len(lockRequests)-2]
-	}
-
-	return append(lockRequests[:idx], lockRequests[idx+1:]...)
 }
 
 func (lm *lockManager) release(txn *pb.Transaction) {
 	// find lock that was held and release it
+	lm.innerRelease(txn.Id, txn.ReadWriteSet)
+	lm.innerRelease(txn.Id, txn.ReadSet)
+
 	// subsequent transactions might be able to run now...check that as well
-	for i := 0; i < len(txn.ReadWriteSet); i++ {
-		key := txn.ReadWriteSet[i]
+}
+
+func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) {
+	for i := 0; i < len(set); i++ {
+		key := set[i]
 		if lm.isKeyLocal(key) {
 			keyHash := lm.hash(key)
 			lockRequests, ok := lm.lockMap[keyHash]
-			txnId, _ := ulid.ParseIdFromProto(txn.Id)
+
 			if ok {
+				txnID, _ := ulid.ParseIdFromProto(txnIDProto)
 				i := 0
 				for ; i < len(lockRequests); i++ {
 					id, _ := ulid.ParseIdFromProto(lockRequests[i].txn.Id)
-					if txnId.CompareTo(id) == 0 {
+					if txnID.CompareTo(id) == 0 {
 						break
 					}
 				}
+
 				if i < len(lockRequests) {
 					// remove i
 					lockRequests = lm.removeIdx(lockRequests, i)
@@ -158,4 +174,14 @@ func (lm *lockManager) release(txn *pb.Transaction) {
 			}
 		}
 	}
+}
+
+func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequest {
+	if idx == 0 {
+		return lockRequests[1:]
+	} else if idx == len(lockRequests)-1 {
+		return lockRequests[:len(lockRequests)-1]
+	}
+
+	return append(lockRequests[:idx], lockRequests[idx+1:]...)
 }

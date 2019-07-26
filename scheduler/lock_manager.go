@@ -64,21 +64,24 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 	return true
 }
 
-func (lm *lockManager) lock(txn *pb.Transaction) {
+func (lm *lockManager) lock(txn *pb.Transaction) int {
+	numLocksNotAcquired := 0
 	// lock the read-write set first
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
-	lm.innerLock(txn, write, txn.ReadWriteSet)
+	numLocksNotAcquired += lm.innerLock(txn, write, txn.ReadWriteSet)
 
 	// lock read set
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
-	lm.innerLock(txn, read, txn.ReadSet)
+	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
+	return numLocksNotAcquired
 }
 
-func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byte) {
+func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byte) int {
+	numLocksNotAcquired := 0
 	for i := 0; i < len(set); i++ {
 		key := set[i]
 		if lm.isKeyLocal(key) {
@@ -99,15 +102,28 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					}
 					lockRequests = append(lockRequests, req)
 					lm.lockMap[keyHash] = lockRequests
-					return
+					break
+				}
+
+				// at this point I know there are a bunch of other requests sitting
+				// I'm a write so I will certainly not get the lock and have to wait
+				if mode == write {
+					numLocksNotAcquired++
 				}
 
 				txnID, _ := ulid.ParseIdFromProto(txn.Id)
 				for ; j < len(lockRequests); j++ {
+
+					// if I'm a read and I find a write ahead of me,
+					// I know I won't be getting the lock
+					if mode == read && lockRequests[j].mode == write {
+						numLocksNotAcquired++
+					}
+
 					id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
 					if txnID.CompareTo(id) == 0 {
 						// it seems I requested the lock already
-						return
+						break
 					}
 				}
 
@@ -135,45 +151,80 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 			}
 		}
 	}
+
+	return numLocksNotAcquired
 }
 
-func (lm *lockManager) release(txn *pb.Transaction) {
+func (lm *lockManager) release(txn *pb.Transaction) []lockRequest {
+	grantedRequests := make([]lockRequest, 0)
 	// find lock that was held and release it
-	lm.innerRelease(txn.Id, txn.ReadWriteSet)
-	lm.innerRelease(txn.Id, txn.ReadSet)
-
-	// subsequent transactions might be able to run now...check that as well
+	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadWriteSet)...)
+	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadSet)...)
+	return grantedRequests
 }
 
-func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) {
+func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRequest {
+	precededByWrite := false
+	var deletedLockRequest *lockRequest
+	j := 0
+
 	for i := 0; i < len(set); i++ {
 		key := set[i]
-		if lm.isKeyLocal(key) {
-			keyHash := lm.hash(key)
-			lockRequests, ok := lm.lockMap[keyHash]
+		keyHash := lm.hash(key)
+		lockRequests, ok := lm.lockMap[keyHash]
 
-			if ok {
-				txnID, _ := ulid.ParseIdFromProto(txnIDProto)
-				i := 0
-				for ; i < len(lockRequests); i++ {
-					id, _ := ulid.ParseIdFromProto(lockRequests[i].txn.Id)
-					if txnID.CompareTo(id) == 0 {
-						break
-					}
+		if ok {
+			txnID, _ := ulid.ParseIdFromProto(txnIDProto)
+			for ; j < len(lockRequests); j++ {
+				id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
+				if lockRequests[j].mode == write {
+					precededByWrite = true
 				}
+				if txnID.CompareTo(id) == 0 {
+					break
+				}
+			}
 
-				if i < len(lockRequests) {
-					// remove i
-					lockRequests = lm.removeIdx(lockRequests, i)
-					if len(lockRequests) > 0 {
-						lm.lockMap[keyHash] = lockRequests
-					} else {
-						delete(lm.lockMap, keyHash)
-					}
+			if j < len(lockRequests) {
+				// remove i
+				deletedLockRequest = &lockRequests[j]
+				lockRequests = lm.removeIdx(lockRequests, j)
+				if len(lockRequests) > 0 {
+					lm.lockMap[keyHash] = lockRequests
+				} else {
+					delete(lm.lockMap, keyHash)
 				}
 			}
 		}
+
+		// subsequent transactions might be able to run now...check that as well
+		// Grant subsequent request(s) if:
+		//  (a) The canceled request held a write lock.
+		//  (b) The canceled request held a read lock ALONE.
+		//  (c) The canceled request held a write lock preceded only by read
+		//      requests and followed by one or more read requests.
+		if deletedLockRequest != nil && j < len(lockRequests) {
+			newOwner := make([]lockRequest, 0)
+
+			if deletedLockRequest.mode == write || (deletedLockRequest.mode == write && lockRequests[j].mode == write) {
+				if lockRequests[j].mode == write {
+					newOwner = append(newOwner, lockRequests[j])
+				}
+
+				for ; j < len(lockRequests) && lockRequests[j].mode == read; j++ {
+					newOwner = append(newOwner, lockRequests[j])
+				}
+			} else if !precededByWrite && deletedLockRequest.mode == write && lockRequests[j].mode == read {
+				for ; j < len(lockRequests) && lockRequests[j].mode == read; j++ {
+					newOwner = append(newOwner, lockRequests[j])
+				}
+			}
+
+			return newOwner
+		}
 	}
+
+	return nil
 }
 
 func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequest {

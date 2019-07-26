@@ -57,9 +57,9 @@ func TestBasic(t *testing.T) {
 	resp := ss.Schedule(mockSS)
 	assert.Nil(t, resp)
 	assert.Equal(t, 1, len(log.m))
-	b := log.GetIndex(uint64(1))
+	b := log.getIndex(uint64(1))
 	assert.NotNil(t, b)
 	assert.Equal(t, uint64(1), b.Epoch)
-	b = log.GetIndex(uint64(11))
+	b = log.getIndex(uint64(11))
 	assert.Nil(t, b)
 }

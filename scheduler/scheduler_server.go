@@ -51,7 +51,7 @@ func (ss *SchedulerServer) Schedule(stream pb.Scheduler_ScheduleServer) error {
 			)
 		}
 
-		ss.log.AddBatch(batch)
+		ss.log.addBatch(batch)
 	}
 }
 

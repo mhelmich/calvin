@@ -29,11 +29,11 @@ type txnLog struct {
 	lastCleanedIdx uint64
 }
 
-func (tl *txnLog) AddBatch(batch *pb.TransactionBatch) {
+func (tl *txnLog) addBatch(batch *pb.TransactionBatch) {
 	tl.m[batch.Epoch] = batch
 }
 
-func (tl *txnLog) GetIndex(idx uint64) *pb.TransactionBatch {
+func (tl *txnLog) getIndex(idx uint64) *pb.TransactionBatch {
 	batch, ok := tl.m[idx]
 	if !ok {
 		return nil

@@ -34,25 +34,31 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 // SECTION FOR TRANSACTIONS
 
 message Id128 {
+  option (gogoproto.equal) = true;
+  option (gogoproto.compare) = true;
+
   uint64 Upper = 1;
   uint64 Lower = 2;
 }
 
 message Transaction {
-  Id128 id = 1;
+  option (gogoproto.equal) = true;
+  option (gogoproto.compare) = true;
+
+  Id128 Id = 1;
   // keys of the data objects that are being accessed
   // do I need this at all if I have read_write_set?
-  repeated bytes write_set = 2;
-  repeated bytes read_set = 3;
-  repeated bytes read_write_set = 4;
+  repeated bytes WriteSet = 2;
+  repeated bytes ReadSet = 3;
+  repeated bytes ReadWriteSet = 4;
 
   // ids of the nodes that are being contacted
-  repeated int64 reader_nodes = 5;
-  repeated int64 writer_nodes = 6;
+  repeated int64 ReaderNodes = 5;
+  repeated int64 WriterNodes = 6;
 
   // the stored procedure that's being invoked
-  string stored_procedure = 7;
-  repeated bytes stored_procedure_args = 8;
+  string StoredProcedure = 7;
+  repeated bytes StoredProcedureArgs = 8;
 }
 
 message TransactionBatch {
@@ -81,8 +87,25 @@ message LowIsolationReadResponse {
 }
 
 service Scheduler {
-  rpc schedule(stream TransactionBatch) returns (SchedulerResponse) {}
-  rpc lowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
+  rpc Schedule(stream TransactionBatch) returns (SchedulerResponse) {}
+  rpc LowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
+}
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR THE LOCK SERVICE
+
+message LockRequest {
+  Transaction Txn = 1;
+}
+
+message LockResponse {
+  Id128 TxnId = 1;
+  bool AcquiredLock = 2;
+}
+
+service LockService {
+  rpc AcquireLock(stream LockRequest) returns (stream LockResponse) {}
 }
 
 //////////////////////////////////////////

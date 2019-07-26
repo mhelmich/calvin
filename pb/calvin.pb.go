@@ -4,6 +4,7 @@
 package pb
 
 import (
+	bytes "bytes"
 	context "context"
 	fmt "fmt"
 	_ "github.com/gogo/protobuf/gogoproto"
@@ -67,17 +68,18 @@ func (m *Id128) XXX_DiscardUnknown() {
 var xxx_messageInfo_Id128 proto.InternalMessageInfo
 
 type Transaction struct {
-	Id *Id128 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id *Id128 `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
 	// keys of the data objects that are being accessed
-	WriteSet     [][]byte `protobuf:"bytes,2,rep,name=write_set,json=writeSet,proto3" json:"write_set,omitempty"`
-	ReadSet      [][]byte `protobuf:"bytes,3,rep,name=read_set,json=readSet,proto3" json:"read_set,omitempty"`
-	ReadWriteSet [][]byte `protobuf:"bytes,4,rep,name=read_write_set,json=readWriteSet,proto3" json:"read_write_set,omitempty"`
+	// do I need this at all if I have read_write_set?
+	WriteSet     [][]byte `protobuf:"bytes,2,rep,name=WriteSet,proto3" json:"WriteSet,omitempty"`
+	ReadSet      [][]byte `protobuf:"bytes,3,rep,name=ReadSet,proto3" json:"ReadSet,omitempty"`
+	ReadWriteSet [][]byte `protobuf:"bytes,4,rep,name=ReadWriteSet,proto3" json:"ReadWriteSet,omitempty"`
 	// ids of the nodes that are being contacted
-	ReaderNodes []int64 `protobuf:"varint,5,rep,packed,name=reader_nodes,json=readerNodes,proto3" json:"reader_nodes,omitempty"`
-	WriterNodes []int64 `protobuf:"varint,6,rep,packed,name=writer_nodes,json=writerNodes,proto3" json:"writer_nodes,omitempty"`
+	ReaderNodes []int64 `protobuf:"varint,5,rep,packed,name=ReaderNodes,proto3" json:"ReaderNodes,omitempty"`
+	WriterNodes []int64 `protobuf:"varint,6,rep,packed,name=WriterNodes,proto3" json:"WriterNodes,omitempty"`
 	// the stored procedure that's being invoked
-	StoredProcedure      string   `protobuf:"bytes,7,opt,name=stored_procedure,json=storedProcedure,proto3" json:"stored_procedure,omitempty"`
-	StoredProcedureArgs  [][]byte `protobuf:"bytes,8,rep,name=stored_procedure_args,json=storedProcedureArgs,proto3" json:"stored_procedure_args,omitempty"`
+	StoredProcedure      string   `protobuf:"bytes,7,opt,name=StoredProcedure,proto3" json:"StoredProcedure,omitempty"`
+	StoredProcedureArgs  [][]byte `protobuf:"bytes,8,rep,name=StoredProcedureArgs,proto3" json:"StoredProcedureArgs,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
@@ -281,6 +283,87 @@ func (m *LowIsolationReadResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_LowIsolationReadResponse proto.InternalMessageInfo
 
+type LockRequest struct {
+	Txn                  *Transaction `protobuf:"bytes,1,opt,name=Txn,proto3" json:"Txn,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
+	XXX_unrecognized     []byte       `json:"-"`
+	XXX_sizecache        int32        `json:"-"`
+}
+
+func (m *LockRequest) Reset()         { *m = LockRequest{} }
+func (m *LockRequest) String() string { return proto.CompactTextString(m) }
+func (*LockRequest) ProtoMessage()    {}
+func (*LockRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_afc31d04251e05fb, []int{6}
+}
+func (m *LockRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LockRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LockRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LockRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LockRequest.Merge(m, src)
+}
+func (m *LockRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *LockRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_LockRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LockRequest proto.InternalMessageInfo
+
+type LockResponse struct {
+	TxnId                *Id128   `protobuf:"bytes,1,opt,name=TxnId,proto3" json:"TxnId,omitempty"`
+	AcquiredLock         bool     `protobuf:"varint,2,opt,name=AcquiredLock,proto3" json:"AcquiredLock,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *LockResponse) Reset()         { *m = LockResponse{} }
+func (m *LockResponse) String() string { return proto.CompactTextString(m) }
+func (*LockResponse) ProtoMessage()    {}
+func (*LockResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_afc31d04251e05fb, []int{7}
+}
+func (m *LockResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LockResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LockResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LockResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LockResponse.Merge(m, src)
+}
+func (m *LockResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *LockResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_LockResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LockResponse proto.InternalMessageInfo
+
 type StepReq struct {
 	RaftNodeId           int64           `protobuf:"varint,1,opt,name=RaftNodeId,proto3" json:"RaftNodeId,omitempty"`
 	Message              *raftpb.Message `protobuf:"bytes,2,opt,name=Message,proto3" json:"Message,omitempty"`
@@ -293,7 +376,7 @@ func (m *StepReq) Reset()         { *m = StepReq{} }
 func (m *StepReq) String() string { return proto.CompactTextString(m) }
 func (*StepReq) ProtoMessage()    {}
 func (*StepReq) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{6}
+	return fileDescriptor_afc31d04251e05fb, []int{8}
 }
 func (m *StepReq) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -333,7 +416,7 @@ func (m *StepResp) Reset()         { *m = StepResp{} }
 func (m *StepResp) String() string { return proto.CompactTextString(m) }
 func (*StepResp) ProtoMessage()    {}
 func (*StepResp) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{7}
+	return fileDescriptor_afc31d04251e05fb, []int{9}
 }
 func (m *StepResp) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -369,6 +452,8 @@ func init() {
 	proto.RegisterType((*SchedulerResponse)(nil), "pb.SchedulerResponse")
 	proto.RegisterType((*LowIsolationReadRequest)(nil), "pb.LowIsolationReadRequest")
 	proto.RegisterType((*LowIsolationReadResponse)(nil), "pb.LowIsolationReadResponse")
+	proto.RegisterType((*LockRequest)(nil), "pb.LockRequest")
+	proto.RegisterType((*LockResponse)(nil), "pb.LockResponse")
 	proto.RegisterType((*StepReq)(nil), "pb.StepReq")
 	proto.RegisterType((*StepResp)(nil), "pb.StepResp")
 }
@@ -376,46 +461,312 @@ func init() {
 func init() { proto.RegisterFile("pb/calvin.proto", fileDescriptor_afc31d04251e05fb) }
 
 var fileDescriptor_afc31d04251e05fb = []byte{
-	// 613 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0xcd, 0x6e, 0xd3, 0x40,
-	0x10, 0x8e, 0xe3, 0xb4, 0x49, 0x26, 0x11, 0x2d, 0x4b, 0x0a, 0x6e, 0x8a, 0xac, 0x60, 0x21, 0x48,
-	0x0f, 0x24, 0x90, 0x5e, 0x90, 0x38, 0x20, 0x2a, 0x71, 0x88, 0x28, 0x3f, 0xda, 0x14, 0x38, 0x46,
-	0x8e, 0x3d, 0x4d, 0x2d, 0x85, 0xec, 0x76, 0x77, 0xd3, 0xc2, 0x9b, 0xc0, 0x33, 0xf0, 0x22, 0x3d,
-	0xf6, 0x11, 0x68, 0x79, 0x11, 0xb4, 0xb3, 0x36, 0x2d, 0x69, 0xb9, 0xc4, 0xfb, 0x7d, 0xf3, 0x79,
-	0xfc, 0xcd, 0x37, 0xab, 0xc0, 0x9a, 0x9c, 0xf4, 0x93, 0x78, 0x76, 0x9c, 0xcd, 0x7b, 0x52, 0x09,
-	0x23, 0x58, 0x59, 0x4e, 0xda, 0xad, 0xa9, 0x98, 0x0a, 0x82, 0x7d, 0x7b, 0x72, 0x95, 0xf6, 0xa3,
-	0xa9, 0xe8, 0xa1, 0x49, 0xd2, 0x5e, 0x26, 0xfa, 0xf6, 0xd9, 0x57, 0xf1, 0x81, 0xa1, 0x1f, 0x39,
-	0xa1, 0x87, 0xd3, 0x45, 0x3b, 0xb0, 0x32, 0x4c, 0x9f, 0x0d, 0x9e, 0xb3, 0x16, 0xac, 0x7c, 0x94,
-	0x12, 0x55, 0xe0, 0x75, 0xbc, 0x6e, 0x85, 0x3b, 0x60, 0xd9, 0x3d, 0x71, 0x82, 0x2a, 0x28, 0x3b,
-	0x96, 0x40, 0xf4, 0xb3, 0x0c, 0x8d, 0x7d, 0x15, 0xcf, 0x75, 0x9c, 0x98, 0x4c, 0xcc, 0xd9, 0x26,
-	0x94, 0xb3, 0x94, 0x5e, 0x6c, 0x0c, 0xea, 0x3d, 0x39, 0xe9, 0x51, 0x4b, 0x5e, 0xce, 0x52, 0xb6,
-	0x05, 0xf5, 0x13, 0x95, 0x19, 0x1c, 0x6b, 0x34, 0x41, 0xb9, 0xe3, 0x77, 0x9b, 0xbc, 0x46, 0xc4,
-	0x08, 0x0d, 0xdb, 0x84, 0x9a, 0xc2, 0x38, 0xa5, 0x9a, 0x4f, 0xb5, 0xaa, 0xc5, 0xb6, 0xf4, 0x10,
-	0x6e, 0x51, 0xe9, 0xf2, 0xe5, 0x0a, 0x09, 0x9a, 0x96, 0xfd, 0x5c, 0x34, 0x78, 0x00, 0x84, 0x51,
-	0x8d, 0xe7, 0x22, 0x45, 0x1d, 0xac, 0x74, 0xfc, 0xae, 0xcf, 0x1b, 0x8e, 0x7b, 0x67, 0x29, 0x2b,
-	0xa1, 0x1e, 0x85, 0x64, 0xd5, 0x49, 0x1c, 0xe7, 0x24, 0xdb, 0xb0, 0xae, 0x8d, 0x50, 0x98, 0x8e,
-	0xa5, 0x12, 0x09, 0xa6, 0x0b, 0x85, 0x41, 0xb5, 0xe3, 0x75, 0xeb, 0x7c, 0xcd, 0xf1, 0x1f, 0x0a,
-	0x9a, 0x0d, 0x60, 0x63, 0x59, 0x3a, 0x8e, 0xd5, 0x54, 0x07, 0x35, 0x72, 0x77, 0x67, 0x49, 0xff,
-	0x4a, 0x4d, 0x75, 0xb4, 0x80, 0xf5, 0x2b, 0x61, 0xed, 0xc6, 0x26, 0x39, 0x64, 0x3b, 0xd0, 0x34,
-	0x97, 0x9c, 0x0e, 0xbc, 0x8e, 0xdf, 0x6d, 0x0c, 0xd6, 0x6c, 0x76, 0x57, 0xb4, 0xfc, 0x1f, 0x91,
-	0x5d, 0xc6, 0x6b, 0x29, 0x92, 0xc3, 0x62, 0x19, 0x04, 0xd8, 0x5d, 0x58, 0xb5, 0x63, 0x0c, 0xd3,
-	0xc0, 0x27, 0x3a, 0x47, 0xd1, 0x36, 0xdc, 0x1e, 0x25, 0x87, 0x98, 0x2e, 0x66, 0xa8, 0x38, 0x6a,
-	0x29, 0xe6, 0x1a, 0xa9, 0x85, 0x52, 0xc2, 0x6d, 0xb9, 0xce, 0x1d, 0x88, 0x9e, 0xc0, 0xbd, 0x3d,
-	0x71, 0x32, 0xd4, 0x62, 0x16, 0xd3, 0x67, 0x31, 0x4e, 0x39, 0x1e, 0x2d, 0x50, 0x1b, 0xc6, 0xa0,
-	0xf2, 0x06, 0xbf, 0x39, 0x83, 0x4d, 0x4e, 0xe7, 0x48, 0x42, 0x70, 0x5d, 0x9e, 0x7f, 0xe0, 0x06,
-	0xbd, 0x75, 0xf8, 0x29, 0x9e, 0x2d, 0x50, 0xe7, 0x17, 0x20, 0x47, 0x56, 0xbb, 0x8f, 0xea, 0x4b,
-	0xee, 0x9b, 0xce, 0xd6, 0xe0, 0x70, 0x9e, 0xe2, 0xd7, 0xa0, 0xe2, 0x66, 0x24, 0x10, 0xed, 0x43,
-	0x75, 0x64, 0x50, 0x72, 0x3c, 0x62, 0x21, 0x00, 0x8f, 0x0f, 0x4c, 0x3e, 0xb2, 0x1d, 0xc3, 0xe7,
-	0x57, 0x18, 0xb6, 0x0d, 0xd5, 0xb7, 0xa8, 0x75, 0x3c, 0x45, 0x8a, 0xc9, 0x86, 0xea, 0x6e, 0x7d,
-	0x2f, 0xa7, 0x79, 0x51, 0x8f, 0x3a, 0x50, 0x73, 0x5d, 0xb5, 0xbc, 0x39, 0x98, 0xc1, 0x0f, 0x0f,
-	0xea, 0x7f, 0x43, 0x64, 0x2f, 0xa0, 0xa6, 0x73, 0xc0, 0x5a, 0x4b, 0xab, 0xa2, 0xb5, 0xb6, 0x37,
-	0x2c, 0x7b, 0x2d, 0xf5, 0xa8, 0xd4, 0xf5, 0xd8, 0x7b, 0x58, 0x9f, 0x2d, 0x85, 0xc6, 0xb6, 0xac,
-	0xfc, 0x3f, 0xc9, 0xb7, 0xef, 0xdf, 0x5c, 0x2c, 0x5a, 0x0e, 0x5e, 0x42, 0xcb, 0x8e, 0x4d, 0x1e,
-	0xa4, 0x50, 0x66, 0x84, 0xea, 0x38, 0x4b, 0x90, 0x3d, 0x86, 0x8a, 0x9d, 0x8a, 0x35, 0xc8, 0x8b,
-	0x4b, 0xad, 0xdd, 0xbc, 0x04, 0x5a, 0x5a, 0x3f, 0x4f, 0xbd, 0xdd, 0xe0, 0xf4, 0x3c, 0x2c, 0x9d,
-	0x9d, 0x87, 0xa5, 0xd3, 0x8b, 0xd0, 0x3b, 0xbb, 0x08, 0xbd, 0x5f, 0x17, 0xa1, 0xf7, 0xfd, 0x77,
-	0x58, 0x9a, 0xac, 0xd2, 0x7f, 0xc3, 0xce, 0x9f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xe4, 0xcb, 0x44,
-	0xb7, 0x70, 0x04, 0x00, 0x00,
+	// 682 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0xcf, 0x6e, 0xd3, 0x4e,
+	0x10, 0x8e, 0xe3, 0xa4, 0x49, 0x26, 0x91, 0xd2, 0xdf, 0xfe, 0x02, 0x18, 0x83, 0x5c, 0xe3, 0x03,
+	0xb8, 0x07, 0x92, 0x92, 0x4a, 0x08, 0x81, 0x10, 0x6a, 0xa5, 0x1e, 0x22, 0xca, 0x1f, 0x6d, 0x02,
+	0x9c, 0x1d, 0x7b, 0x9a, 0x46, 0x04, 0xef, 0x76, 0xed, 0xb4, 0xe5, 0x4d, 0xe0, 0x06, 0x77, 0x1e,
+	0xa4, 0xc7, 0x3e, 0x02, 0x2d, 0x97, 0x3e, 0x06, 0xda, 0x5d, 0x3b, 0x49, 0xd3, 0x70, 0x89, 0xf7,
+	0xfb, 0xe6, 0xdb, 0xf1, 0xcc, 0x37, 0x13, 0x43, 0x93, 0x0f, 0x3b, 0x61, 0x30, 0x39, 0x1e, 0xc7,
+	0x6d, 0x2e, 0x58, 0xca, 0x48, 0x91, 0x0f, 0xed, 0xd6, 0x88, 0x8d, 0x98, 0x82, 0x1d, 0x79, 0xd2,
+	0x11, 0xfb, 0xe1, 0x88, 0xb5, 0x31, 0x0d, 0xa3, 0xf6, 0x98, 0x75, 0xe4, 0xb3, 0x23, 0x82, 0x83,
+	0x54, 0xfd, 0xf0, 0xa1, 0x7a, 0x68, 0x9d, 0xf7, 0x12, 0xca, 0xbd, 0xe8, 0x49, 0xf7, 0x19, 0x69,
+	0x41, 0xf9, 0x03, 0xe7, 0x28, 0x2c, 0xc3, 0x35, 0xfc, 0x12, 0xd5, 0x40, 0xb2, 0xfb, 0xec, 0x04,
+	0x85, 0x55, 0xd4, 0xac, 0x02, 0xcf, 0xab, 0x57, 0x3f, 0x36, 0x8c, 0xab, 0x9f, 0x1b, 0x86, 0xf7,
+	0xab, 0x08, 0xf5, 0x81, 0x08, 0xe2, 0x24, 0x08, 0xd3, 0x31, 0x8b, 0xc9, 0x5d, 0x28, 0xf6, 0x22,
+	0x95, 0xa2, 0xde, 0xad, 0xb5, 0xf9, 0xb0, 0xad, 0x92, 0xd3, 0x62, 0x2f, 0x22, 0x36, 0x54, 0x3f,
+	0x89, 0x71, 0x8a, 0x7d, 0x4c, 0xad, 0xa2, 0x6b, 0xfa, 0x0d, 0x3a, 0xc3, 0xc4, 0x82, 0x0a, 0xc5,
+	0x20, 0x92, 0x21, 0x53, 0x85, 0x72, 0x48, 0x3c, 0x68, 0xc8, 0xe3, 0xec, 0x66, 0x49, 0x85, 0xaf,
+	0x71, 0xc4, 0x85, 0xba, 0xc4, 0x28, 0xde, 0xb2, 0x08, 0x13, 0xab, 0xec, 0x9a, 0xbe, 0x49, 0x17,
+	0x29, 0xa9, 0x50, 0xea, 0x4c, 0xb1, 0xa6, 0x15, 0x0b, 0x14, 0xf1, 0xa1, 0xd9, 0x4f, 0x99, 0xc0,
+	0xe8, 0xbd, 0x60, 0x21, 0x46, 0x53, 0x81, 0x56, 0xc5, 0x35, 0xfc, 0x1a, 0x5d, 0xa6, 0xc9, 0x16,
+	0xfc, 0xbf, 0x44, 0xed, 0x88, 0x51, 0x62, 0x55, 0x55, 0x61, 0xab, 0x42, 0x0b, 0x76, 0x4d, 0x61,
+	0x7d, 0xc1, 0xad, 0xdd, 0x20, 0x0d, 0x0f, 0xc9, 0x36, 0x34, 0xd2, 0x39, 0x97, 0x58, 0x86, 0x6b,
+	0xfa, 0xf5, 0x6e, 0x53, 0x9a, 0xb7, 0xa0, 0xa5, 0xd7, 0x44, 0x72, 0x2e, 0x7b, 0x9c, 0x85, 0x87,
+	0xf9, 0x5c, 0x14, 0x20, 0xb7, 0x61, 0x4d, 0x76, 0xd3, 0x8b, 0x2c, 0x53, 0xd1, 0x19, 0xf2, 0x36,
+	0xe1, 0xbf, 0x7e, 0x78, 0x88, 0xd1, 0x74, 0x82, 0x82, 0x62, 0xc2, 0x59, 0x9c, 0xa0, 0x4a, 0x21,
+	0x04, 0xd3, 0x03, 0xaf, 0x51, 0x0d, 0xbc, 0xc7, 0x70, 0x67, 0x9f, 0x9d, 0xf4, 0x12, 0x36, 0x09,
+	0xd4, 0x6b, 0x31, 0x88, 0x28, 0x1e, 0x4d, 0x31, 0x49, 0x09, 0x81, 0xd2, 0x6b, 0xfc, 0xaa, 0x0b,
+	0x6c, 0x50, 0x75, 0xf6, 0x38, 0x58, 0x37, 0xe5, 0xd9, 0x0b, 0x56, 0xe8, 0x65, 0x85, 0x1f, 0x83,
+	0xc9, 0x14, 0x93, 0x6c, 0x05, 0x32, 0x24, 0xb5, 0x03, 0x14, 0x5f, 0xb2, 0xba, 0xd5, 0x59, 0x16,
+	0xd8, 0x8b, 0x23, 0x3c, 0xb5, 0x4a, 0xba, 0x47, 0x05, 0xbc, 0x2d, 0xa8, 0xef, 0xb3, 0xf0, 0x73,
+	0x5e, 0xd4, 0x03, 0x30, 0x07, 0xa7, 0x71, 0xb6, 0x71, 0x37, 0x4c, 0x93, 0x31, 0xaf, 0x0f, 0x0d,
+	0x7d, 0x23, 0xab, 0x6b, 0x03, 0xca, 0x83, 0xd3, 0x78, 0xd5, 0x9a, 0x6a, 0x5e, 0xee, 0xdc, 0x4e,
+	0x78, 0x34, 0x1d, 0x0b, 0x8c, 0xe4, 0x45, 0xe5, 0x71, 0x95, 0x5e, 0xe3, 0xbc, 0x01, 0x54, 0xfa,
+	0x29, 0x72, 0x8a, 0x47, 0xc4, 0x01, 0xa0, 0xc1, 0x41, 0x9a, 0x39, 0x2f, 0x93, 0x9a, 0x74, 0x81,
+	0x21, 0x9b, 0x50, 0x79, 0x83, 0x49, 0x12, 0x8c, 0x50, 0x65, 0x92, 0x65, 0xea, 0xff, 0x61, 0x3b,
+	0xa3, 0x69, 0x1e, 0xf7, 0x5c, 0xa8, 0xea, 0xac, 0x09, 0x5f, 0x3d, 0x9f, 0xee, 0x77, 0x03, 0x6a,
+	0xb3, 0x59, 0x92, 0x17, 0x50, 0xcd, 0x01, 0x69, 0x2d, 0x35, 0xaf, 0xb6, 0xcb, 0xbe, 0x25, 0xd9,
+	0x1b, 0xc3, 0xf7, 0x0a, 0xbe, 0x41, 0xde, 0xc1, 0xfa, 0xf2, 0xec, 0xc8, 0x3d, 0x29, 0xff, 0xc7,
+	0x02, 0xd8, 0xf7, 0x57, 0x07, 0xf3, 0x94, 0xdd, 0x3d, 0x3d, 0x9a, 0x3e, 0x8a, 0xe3, 0x71, 0x88,
+	0xe4, 0x29, 0xd4, 0x33, 0xcb, 0x24, 0x4b, 0x9a, 0xfa, 0xf6, 0x6c, 0x74, 0xf6, 0xfa, 0x9c, 0x98,
+	0x57, 0xb5, 0x65, 0x74, 0x5f, 0x41, 0x4b, 0xba, 0xa7, 0x5a, 0xe1, 0x4c, 0xa4, 0x79, 0xbe, 0x47,
+	0x50, 0x92, 0xe6, 0x90, 0xba, 0x6a, 0x49, 0x9b, 0x6f, 0x37, 0xe6, 0x20, 0xe1, 0x3a, 0xc1, 0xae,
+	0x75, 0x76, 0xe1, 0x14, 0xce, 0x2f, 0x9c, 0xc2, 0xd9, 0xa5, 0x63, 0x9c, 0x5f, 0x3a, 0xc6, 0xef,
+	0x4b, 0xc7, 0xf8, 0xf6, 0xc7, 0x29, 0x0c, 0xd7, 0xd4, 0x47, 0x6f, 0xfb, 0x6f, 0x00, 0x00, 0x00,
+	0xff, 0xff, 0x9c, 0x37, 0xd9, 0xd6, 0x49, 0x05, 0x00, 0x00,
+}
+
+func (this *Id128) Compare(that interface{}) int {
+	if that == nil {
+		if this == nil {
+			return 0
+		}
+		return 1
+	}
+
+	that1, ok := that.(*Id128)
+	if !ok {
+		that2, ok := that.(Id128)
+		if ok {
+			that1 = &that2
+		} else {
+			return 1
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return 0
+		}
+		return 1
+	} else if this == nil {
+		return -1
+	}
+	if this.Upper != that1.Upper {
+		if this.Upper < that1.Upper {
+			return -1
+		}
+		return 1
+	}
+	if this.Lower != that1.Lower {
+		if this.Lower < that1.Lower {
+			return -1
+		}
+		return 1
+	}
+	if c := bytes.Compare(this.XXX_unrecognized, that1.XXX_unrecognized); c != 0 {
+		return c
+	}
+	return 0
+}
+func (this *Transaction) Compare(that interface{}) int {
+	if that == nil {
+		if this == nil {
+			return 0
+		}
+		return 1
+	}
+
+	that1, ok := that.(*Transaction)
+	if !ok {
+		that2, ok := that.(Transaction)
+		if ok {
+			that1 = &that2
+		} else {
+			return 1
+		}
+	}
+	if that1 == nil {
+		if this == nil {
+			return 0
+		}
+		return 1
+	} else if this == nil {
+		return -1
+	}
+	if c := this.Id.Compare(that1.Id); c != 0 {
+		return c
+	}
+	if len(this.WriteSet) != len(that1.WriteSet) {
+		if len(this.WriteSet) < len(that1.WriteSet) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.WriteSet {
+		if c := bytes.Compare(this.WriteSet[i], that1.WriteSet[i]); c != 0 {
+			return c
+		}
+	}
+	if len(this.ReadSet) != len(that1.ReadSet) {
+		if len(this.ReadSet) < len(that1.ReadSet) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.ReadSet {
+		if c := bytes.Compare(this.ReadSet[i], that1.ReadSet[i]); c != 0 {
+			return c
+		}
+	}
+	if len(this.ReadWriteSet) != len(that1.ReadWriteSet) {
+		if len(this.ReadWriteSet) < len(that1.ReadWriteSet) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.ReadWriteSet {
+		if c := bytes.Compare(this.ReadWriteSet[i], that1.ReadWriteSet[i]); c != 0 {
+			return c
+		}
+	}
+	if len(this.ReaderNodes) != len(that1.ReaderNodes) {
+		if len(this.ReaderNodes) < len(that1.ReaderNodes) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.ReaderNodes {
+		if this.ReaderNodes[i] != that1.ReaderNodes[i] {
+			if this.ReaderNodes[i] < that1.ReaderNodes[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	if len(this.WriterNodes) != len(that1.WriterNodes) {
+		if len(this.WriterNodes) < len(that1.WriterNodes) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.WriterNodes {
+		if this.WriterNodes[i] != that1.WriterNodes[i] {
+			if this.WriterNodes[i] < that1.WriterNodes[i] {
+				return -1
+			}
+			return 1
+		}
+	}
+	if this.StoredProcedure != that1.StoredProcedure {
+		if this.StoredProcedure < that1.StoredProcedure {
+			return -1
+		}
+		return 1
+	}
+	if len(this.StoredProcedureArgs) != len(that1.StoredProcedureArgs) {
+		if len(this.StoredProcedureArgs) < len(that1.StoredProcedureArgs) {
+			return -1
+		}
+		return 1
+	}
+	for i := range this.StoredProcedureArgs {
+		if c := bytes.Compare(this.StoredProcedureArgs[i], that1.StoredProcedureArgs[i]); c != 0 {
+			return c
+		}
+	}
+	if c := bytes.Compare(this.XXX_unrecognized, that1.XXX_unrecognized); c != 0 {
+		return c
+	}
+	return 0
+}
+func (this *Id128) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Id128)
+	if !ok {
+		that2, ok := that.(Id128)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Upper != that1.Upper {
+		return false
+	}
+	if this.Lower != that1.Lower {
+		return false
+	}
+	if !bytes.Equal(this.XXX_unrecognized, that1.XXX_unrecognized) {
+		return false
+	}
+	return true
+}
+func (this *Transaction) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Transaction)
+	if !ok {
+		that2, ok := that.(Transaction)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Id.Equal(that1.Id) {
+		return false
+	}
+	if len(this.WriteSet) != len(that1.WriteSet) {
+		return false
+	}
+	for i := range this.WriteSet {
+		if !bytes.Equal(this.WriteSet[i], that1.WriteSet[i]) {
+			return false
+		}
+	}
+	if len(this.ReadSet) != len(that1.ReadSet) {
+		return false
+	}
+	for i := range this.ReadSet {
+		if !bytes.Equal(this.ReadSet[i], that1.ReadSet[i]) {
+			return false
+		}
+	}
+	if len(this.ReadWriteSet) != len(that1.ReadWriteSet) {
+		return false
+	}
+	for i := range this.ReadWriteSet {
+		if !bytes.Equal(this.ReadWriteSet[i], that1.ReadWriteSet[i]) {
+			return false
+		}
+	}
+	if len(this.ReaderNodes) != len(that1.ReaderNodes) {
+		return false
+	}
+	for i := range this.ReaderNodes {
+		if this.ReaderNodes[i] != that1.ReaderNodes[i] {
+			return false
+		}
+	}
+	if len(this.WriterNodes) != len(that1.WriterNodes) {
+		return false
+	}
+	for i := range this.WriterNodes {
+		if this.WriterNodes[i] != that1.WriterNodes[i] {
+			return false
+		}
+	}
+	if this.StoredProcedure != that1.StoredProcedure {
+		return false
+	}
+	if len(this.StoredProcedureArgs) != len(that1.StoredProcedureArgs) {
+		return false
+	}
+	for i := range this.StoredProcedureArgs {
+		if !bytes.Equal(this.StoredProcedureArgs[i], that1.StoredProcedureArgs[i]) {
+			return false
+		}
+	}
+	if !bytes.Equal(this.XXX_unrecognized, that1.XXX_unrecognized) {
+		return false
+	}
+	return true
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -443,7 +794,7 @@ func NewSchedulerClient(cc *grpc.ClientConn) SchedulerClient {
 }
 
 func (c *schedulerClient) Schedule(ctx context.Context, opts ...grpc.CallOption) (Scheduler_ScheduleClient, error) {
-	stream, err := c.cc.NewStream(ctx, &_Scheduler_serviceDesc.Streams[0], "/pb.Scheduler/schedule", opts...)
+	stream, err := c.cc.NewStream(ctx, &_Scheduler_serviceDesc.Streams[0], "/pb.Scheduler/Schedule", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -478,7 +829,7 @@ func (x *schedulerScheduleClient) CloseAndRecv() (*SchedulerResponse, error) {
 
 func (c *schedulerClient) LowIsolationRead(ctx context.Context, in *LowIsolationReadRequest, opts ...grpc.CallOption) (*LowIsolationReadResponse, error) {
 	out := new(LowIsolationReadResponse)
-	err := c.cc.Invoke(ctx, "/pb.Scheduler/lowIsolationRead", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/pb.Scheduler/LowIsolationRead", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -544,14 +895,110 @@ var _Scheduler_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*SchedulerServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "lowIsolationRead",
+			MethodName: "LowIsolationRead",
 			Handler:    _Scheduler_LowIsolationRead_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "schedule",
+			StreamName:    "Schedule",
 			Handler:       _Scheduler_Schedule_Handler,
+			ClientStreams: true,
+		},
+	},
+	Metadata: "pb/calvin.proto",
+}
+
+// LockServiceClient is the client API for LockService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
+type LockServiceClient interface {
+	AcquireLock(ctx context.Context, opts ...grpc.CallOption) (LockService_AcquireLockClient, error)
+}
+
+type lockServiceClient struct {
+	cc *grpc.ClientConn
+}
+
+func NewLockServiceClient(cc *grpc.ClientConn) LockServiceClient {
+	return &lockServiceClient{cc}
+}
+
+func (c *lockServiceClient) AcquireLock(ctx context.Context, opts ...grpc.CallOption) (LockService_AcquireLockClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_LockService_serviceDesc.Streams[0], "/pb.LockService/AcquireLock", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &lockServiceAcquireLockClient{stream}
+	return x, nil
+}
+
+type LockService_AcquireLockClient interface {
+	Send(*LockRequest) error
+	Recv() (*LockResponse, error)
+	grpc.ClientStream
+}
+
+type lockServiceAcquireLockClient struct {
+	grpc.ClientStream
+}
+
+func (x *lockServiceAcquireLockClient) Send(m *LockRequest) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *lockServiceAcquireLockClient) Recv() (*LockResponse, error) {
+	m := new(LockResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// LockServiceServer is the server API for LockService service.
+type LockServiceServer interface {
+	AcquireLock(LockService_AcquireLockServer) error
+}
+
+func RegisterLockServiceServer(s *grpc.Server, srv LockServiceServer) {
+	s.RegisterService(&_LockService_serviceDesc, srv)
+}
+
+func _LockService_AcquireLock_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(LockServiceServer).AcquireLock(&lockServiceAcquireLockServer{stream})
+}
+
+type LockService_AcquireLockServer interface {
+	Send(*LockResponse) error
+	Recv() (*LockRequest, error)
+	grpc.ServerStream
+}
+
+type lockServiceAcquireLockServer struct {
+	grpc.ServerStream
+}
+
+func (x *lockServiceAcquireLockServer) Send(m *LockResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *lockServiceAcquireLockServer) Recv() (*LockRequest, error) {
+	m := new(LockRequest)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+var _LockService_serviceDesc = grpc.ServiceDesc{
+	ServiceName: "pb.LockService",
+	HandlerType: (*LockServiceServer)(nil),
+	Methods:     []grpc.MethodDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "AcquireLock",
+			Handler:       _LockService_AcquireLock_Handler,
+			ServerStreams: true,
 			ClientStreams: true,
 		},
 	},
@@ -936,6 +1383,78 @@ func (m *LowIsolationReadResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *LockRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LockRequest) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Txn != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.Txn.Size()))
+		n6, err := m.Txn.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n6
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *LockResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LockResponse) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.TxnId != nil {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.TxnId.Size()))
+		n7, err := m.TxnId.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n7
+	}
+	if m.AcquiredLock {
+		dAtA[i] = 0x10
+		i++
+		if m.AcquiredLock {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func (m *StepReq) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -960,11 +1479,11 @@ func (m *StepReq) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(m.Message.Size()))
-		n6, err := m.Message.MarshalTo(dAtA[i:])
+		n8, err := m.Message.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n6
+		i += n8
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -1165,6 +1684,41 @@ func (m *LowIsolationReadResponse) Size() (n int) {
 	}
 	if m.Index != 0 {
 		n += 1 + sovCalvin(uint64(m.Index))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *LockRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Txn != nil {
+		l = m.Txn.Size()
+		n += 1 + l + sovCalvin(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *LockResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.TxnId != nil {
+		l = m.TxnId.Size()
+		n += 1 + l + sovCalvin(uint64(l))
+	}
+	if m.AcquiredLock {
+		n += 2
 	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
@@ -2143,6 +2697,206 @@ func (m *LowIsolationReadResponse) Unmarshal(dAtA []byte) error {
 					break
 				}
 			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCalvin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LockRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCalvin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LockRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LockRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Txn", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.Txn == nil {
+				m.Txn = &Transaction{}
+			}
+			if err := m.Txn.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCalvin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LockResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCalvin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LockResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LockResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TxnId", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.TxnId == nil {
+				m.TxnId = &Id128{}
+			}
+			if err := m.TxnId.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field AcquiredLock", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.AcquiredLock = bool(v != 0)
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCalvin(dAtA[iNdEx:])

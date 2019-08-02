@@ -31,16 +31,32 @@ type DataStore interface {
 	Set(key []byte, value []byte)
 }
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache) *engine {
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *engine {
 	readyToExecChan := make(chan *txnExecEnvironment, 11)
 
 	rrs := newRemoteReadServer(readyToExecChan)
 	pb.RegisterRemoteReadServer(srvr, rrs)
 
+	stopChan := make(chan interface{})
+
+	for i := 0; i < 2; i++ {
+		w := worker{
+			scheduledTxnChan: scheduledTxnChan,
+			readyToExecChan:  readyToExecChan,
+			stopChan:         stopChan,
+			store:            store,
+			connCache:        connCache,
+			cip:              cip,
+			logger:           logger,
+		}
+		go w.runWorker()
+	}
+
 	return &engine{
 		scheduledTxnChan: scheduledTxnChan,
-		store:            store,
 		readyToExecChan:  readyToExecChan,
+		stopChan:         stopChan,
+		store:            store,
 		nodeIDToConn:     &sync.Map{},
 		connCache:        connCache,
 	}
@@ -48,10 +64,15 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *g
 
 type engine struct {
 	scheduledTxnChan <-chan *pb.Transaction
-	store            DataStore
 	readyToExecChan  <-chan *txnExecEnvironment
+	stopChan         chan<- interface{}
+	store            DataStore
 	nodeIDToConn     *sync.Map
 	connCache        util.ConnectionCache
+}
+
+func (e *engine) Stop() {
+	close(e.stopChan)
 }
 
 type worker struct {
@@ -60,6 +81,8 @@ type worker struct {
 	stopChan         <-chan interface{}
 	store            DataStore
 	connCache        util.ConnectionCache
+	cip              util.ClusterInfoProvider
+	logger           *log.Entry
 }
 
 func (w *worker) runWorker() {
@@ -85,7 +108,7 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 	// do local reads
 	for idx := range txn.ReadSet {
 		key := txn.ReadSet[idx]
-		if util.IsLocal(key) {
+		if w.cip.IsLocal(key) {
 			value := store.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
@@ -93,34 +116,37 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 	}
 	for idx := range txn.ReadWriteSet {
 		key := txn.ReadWriteSet[idx]
-		if util.IsLocal(key) {
+		if w.cip.IsLocal(key) {
 			value := store.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
 		}
 	}
 	// broadcast remote reads to all write peers
-	w.broadcastLocalReadsToWriterNodes(txn.WriterNodes, len(txn.ReadWriteSet)+len(txn.ReadSet), localKeys, localValues)
+	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues)
 }
 
-func (w *worker) broadcastLocalReadsToWriterNodes(writerNodes []uint64, totalNumLocks int, keys [][]byte, values [][]byte) {
-	for idx := range writerNodes {
-		conn, err := w.connCache.Get(writerNodes[idx])
+func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte) {
+	for idx := range txn.WriterNodes {
+		client, err := w.connCache.GetRemoteReadClient(txn.WriterNodes[idx])
 		if err != nil {
-			log.Fatalf("%s\n", err.Error())
+			w.logger.Fatalf("%s\n", err.Error())
 		}
 
-		client := pb.NewRemoteReadClient(conn)
-		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{})
+		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{
+			TxnId:         txn.Id,
+			TotalNumLocks: uint32(len(txn.ReadWriteSet) + len(txn.ReadSet)),
+			Keys:          keys,
+			Values:        values,
+		})
 		if err != nil {
-			log.Fatalf("%s\n", err.Error())
+			w.logger.Fatalf("%s\n", err.Error())
 		} else if resp.Error != "" {
-			log.Fatalf("%s\n", resp.Error)
+			w.logger.Fatalf("%s\n", resp.Error)
 		}
 	}
-
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
-	log.Infof("ran txn: %s\n", execEnv.txnId.String())
+	w.logger.Infof("ran txn: %s\n", execEnv.txnId.String())
 }

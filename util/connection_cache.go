@@ -19,6 +19,7 @@ package util
 import (
 	"sync"
 
+	"github.com/mhelmich/calvin/pb"
 	"google.golang.org/grpc"
 )
 
@@ -32,7 +33,7 @@ func NewConnectionCache() *connCache {
 }
 
 type ConnectionCache interface {
-	Get(nodeID uint64) (*grpc.ClientConn, error)
+	GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error)
 	Close()
 }
 
@@ -40,16 +41,30 @@ type connCache struct {
 	nodeIDToConn *sync.Map
 }
 
-func (cc *connCache) Get(nodeID uint64) (*grpc.ClientConn, error) {
-	addr := cc.getAddressForNodeID(nodeID)
-	conn, err := grpc.Dial(addr)
+func (cc *connCache) GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error) {
+	conn, err := cc.getConn(nodeID)
 	if err != nil {
 		return nil, err
 	}
 
-	c, loaded := cc.nodeIDToConn.LoadOrStore(nodeID, conn)
-	if loaded {
-		defer conn.Close()
+	return pb.NewRemoteReadClient(conn), nil
+}
+
+func (cc *connCache) getConn(nodeID uint64) (*grpc.ClientConn, error) {
+	addr := cc.getAddressForNodeID(nodeID)
+	c, ok := cc.nodeIDToConn.Load(nodeID)
+
+	if !ok {
+		conn, err := grpc.Dial(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		var loaded bool
+		c, loaded = cc.nodeIDToConn.LoadOrStore(nodeID, conn)
+		if loaded {
+			defer conn.Close()
+		}
 	}
 
 	return c.(*grpc.ClientConn), nil

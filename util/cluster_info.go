@@ -25,7 +25,25 @@ import (
 	"github.com/naoina/toml"
 )
 
-type clusterInfo struct {
+type ClusterInfoProvider interface {
+	IsLocal(key []byte) bool
+}
+
+func NewClusterInfoProvider(ownNodeID uint64) ClusterInfoProvider {
+	return &cip{
+		ownNodeID: ownNodeID,
+	}
+}
+
+type cip struct {
+	ownNodeID uint64
+}
+
+func (c *cip) IsLocal(key []byte) bool {
+	return isLocal(key, c.ownNodeID)
+}
+
+type ClusterInfo struct {
 	NumberPrimaries  int
 	NumberPartitions int
 	Nodes            map[uint64]Node
@@ -38,7 +56,7 @@ type Node struct {
 	Partitions []int
 }
 
-var staticClusterInfo clusterInfo
+var staticClusterInfo ClusterInfo
 
 func readClusterInfo(path string) {
 	f, err := os.Open(path)
@@ -52,7 +70,7 @@ func readClusterInfo(path string) {
 	}
 }
 
-func IsLocal(key []byte, nodeID uint64) bool {
+func isLocal(key []byte, nodeID uint64) bool {
 	hasher := fnv.New64()
 	hasher.Write(key)
 	partition := int(hasher.Sum64() % uint64(staticClusterInfo.NumberPartitions))

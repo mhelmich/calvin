@@ -26,10 +26,11 @@ import (
 type config struct {
 	Servers struct {
 		Self struct {
-			NodeID   uint64
-			Role     string
-			Hostname string
-			Port     int
+			NodeID     uint64
+			Role       string
+			Hostname   string
+			Port       int
+			Partitions []int
 		}
 		NumberPrimaries uint64
 	}
@@ -50,6 +51,7 @@ func readConfig(path string) config {
 		panic(err)
 	}
 	defer f.Close()
+
 	var config config
 	if err := toml.NewDecoder(f).Decode(&config); err != nil {
 		panic(err)

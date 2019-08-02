@@ -25,8 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestLockManagerBasic(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerBasic(t *testing.T) {
+	lm := newlockManager()
 	key := []byte("narf")
 	keyHash := lm.hash(key)
 	txnID, err := ulid.NewId()
@@ -53,8 +53,8 @@ func TestLockManagerBasic(t *testing.T) {
 	assert.Equal(t, 0, len(requests))
 }
 
-func TestLockManagerMultipleTxns(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerMultipleTxns(t *testing.T) {
+	lm := newlockManager()
 	key1 := []byte("key1")
 	key1Hash := lm.hash(key1)
 	key2 := []byte("key2")
@@ -111,8 +111,8 @@ func TestLockManagerMultipleTxns(t *testing.T) {
 	assert.Equal(t, 0, len(requests))
 }
 
-func TestLockManagerSameTxnTwice(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerSameTxnTwice(t *testing.T) {
+	lm := newlockManager()
 	key1 := []byte("key1")
 	key1Hash := lm.hash(key1)
 	key2 := []byte("key2")
@@ -143,8 +143,8 @@ func TestLockManagerSameTxnTwice(t *testing.T) {
 	assert.Equal(t, 1, len(requests))
 }
 
-func TestLockManagerTxnsReleaseMiddle(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerTxnsReleaseMiddle(t *testing.T) {
+	lm := newlockManager()
 	key1 := []byte("key1")
 	key1Hash := lm.hash(key1)
 	key2 := []byte("key2")
@@ -215,8 +215,8 @@ func TestLockManagerTxnsReleaseMiddle(t *testing.T) {
 	assert.Equal(t, 0, txnID3.CompareTo(id2))
 }
 
-func TestLockManagerLockInheritanceWriteToWrite(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerLockInheritanceWriteToWrite(t *testing.T) {
+	lm := newlockManager()
 	key1 := []byte("key1")
 	key1Hash := lm.hash(key1)
 
@@ -259,8 +259,8 @@ func TestLockManagerLockInheritanceWriteToWrite(t *testing.T) {
 	assert.Equal(t, 0, len(requests))
 }
 
-func TestLockManagerLockInheritanceWriteToReads(t *testing.T) {
-	lm := newLockManager()
+func TestlockManagerLockInheritanceWriteToReads(t *testing.T) {
+	lm := newlockManager()
 	key1 := []byte("key1")
 	key1Hash := lm.hash(key1)
 

@@ -48,13 +48,13 @@ message Transaction {
   Id128 Id = 1;
   // keys of the data objects that are being accessed
   // do I need this at all if I have read_write_set?
-  repeated bytes WriteSet = 2;
+  // repeated bytes WriteSet = 2;
   repeated bytes ReadSet = 3;
   repeated bytes ReadWriteSet = 4;
 
   // ids of the nodes that are being contacted
-  repeated int64 ReaderNodes = 5;
-  repeated int64 WriterNodes = 6;
+  repeated uint64 ReaderNodes = 5;
+  repeated uint64 WriterNodes = 6;
 
   // the stored procedure that's being invoked
   string StoredProcedure = 7;
@@ -93,19 +93,21 @@ service Scheduler {
 
 //////////////////////////////////////////
 ////////////////////////////////
-// SECTION FOR THE LOCK SERVICE
+// SECTION FOR REMOTE READS
 
-message LockRequest {
-  Transaction Txn = 1;
-}
-
-message LockResponse {
+message RemoteReadRequest {
   Id128 TxnId = 1;
-  bool AcquiredLock = 2;
+  repeated bytes Keys = 2;
+  repeated bytes Values = 3;
+  uint32 TotalNumLocks = 4;
 }
 
-service LockService {
-  rpc AcquireLock(stream LockRequest) returns (stream LockResponse) {}
+message RemoteReadResponse {
+  string Error = 1;
+}
+
+service RemoteRead {
+  rpc RemoteRead(RemoteReadRequest) returns (RemoteReadResponse) {}
 }
 
 //////////////////////////////////////////

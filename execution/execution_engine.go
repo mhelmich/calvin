@@ -1,0 +1,126 @@
+/*
+ * Copyright 2019 Marco Helmich
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package execution
+
+import (
+	"context"
+	"sync"
+
+	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
+	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+)
+
+type DataStore interface {
+	Get(key []byte) []byte
+	Set(key []byte, value []byte)
+}
+
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache) *engine {
+	readyToExecChan := make(chan *txnExecEnvironment, 11)
+
+	rrs := newRemoteReadServer(readyToExecChan)
+	pb.RegisterRemoteReadServer(srvr, rrs)
+
+	return &engine{
+		scheduledTxnChan: scheduledTxnChan,
+		store:            store,
+		readyToExecChan:  readyToExecChan,
+		nodeIDToConn:     &sync.Map{},
+		connCache:        connCache,
+	}
+}
+
+type engine struct {
+	scheduledTxnChan <-chan *pb.Transaction
+	store            DataStore
+	readyToExecChan  <-chan *txnExecEnvironment
+	nodeIDToConn     *sync.Map
+	connCache        util.ConnectionCache
+}
+
+type worker struct {
+	scheduledTxnChan <-chan *pb.Transaction
+	readyToExecChan  <-chan *txnExecEnvironment
+	stopChan         <-chan interface{}
+	store            DataStore
+	connCache        util.ConnectionCache
+}
+
+func (w *worker) runWorker() {
+	for {
+		select {
+		// wait for txns to be scheduled
+		case txn := <-w.scheduledTxnChan:
+			w.processScheduledTxn(txn, w.store)
+
+		// wait for remote reads to be collected
+		case execEnv := <-w.readyToExecChan:
+			w.runReadyTxn(execEnv)
+
+		case <-w.stopChan:
+			return
+		}
+	}
+}
+
+func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
+	localKeys := make([][]byte, 0)
+	localValues := make([][]byte, 0)
+	// do local reads
+	for idx := range txn.ReadSet {
+		key := txn.ReadSet[idx]
+		if util.IsLocal(key) {
+			value := store.Get(key)
+			localKeys = append(localKeys, key)
+			localValues = append(localValues, value)
+		}
+	}
+	for idx := range txn.ReadWriteSet {
+		key := txn.ReadWriteSet[idx]
+		if util.IsLocal(key) {
+			value := store.Get(key)
+			localKeys = append(localKeys, key)
+			localValues = append(localValues, value)
+		}
+	}
+	// broadcast remote reads to all write peers
+	w.broadcastLocalReadsToWriterNodes(txn.WriterNodes, len(txn.ReadWriteSet)+len(txn.ReadSet), localKeys, localValues)
+}
+
+func (w *worker) broadcastLocalReadsToWriterNodes(writerNodes []uint64, totalNumLocks int, keys [][]byte, values [][]byte) {
+	for idx := range writerNodes {
+		conn, err := w.connCache.Get(writerNodes[idx])
+		if err != nil {
+			log.Fatalf("%s\n", err.Error())
+		}
+
+		client := pb.NewRemoteReadClient(conn)
+		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{})
+		if err != nil {
+			log.Fatalf("%s\n", err.Error())
+		} else if resp.Error != "" {
+			log.Fatalf("%s\n", resp.Error)
+		}
+	}
+
+}
+
+func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
+	log.Infof("ran txn: %s\n", execEnv.txnId.String())
+}

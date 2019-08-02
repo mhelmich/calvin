@@ -67,11 +67,7 @@ type sequencer struct {
 	// numberOfSnapshotsToKeep int
 	// This object describes the topology of the raft group this backend is part of
 	confState raftpb.ConfState
-	// Keeps track of the latest config change id. The next id is this id + 1.
-	// HACK - there's obviously a race condition around this considering that
-	// whatever id this raft node has, the leader in the group might have a higher one
-	latestConfChangeId uint64
-	logger             *log.Entry
+	logger    *log.Entry
 }
 
 func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, <-chan *pb.TransactionBatch, error) {
@@ -136,7 +132,7 @@ func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Tr
 /////////////// RAFT CODE
 
 func (s *sequencer) processReady(rd raft.Ready) {
-	s.logger.Debugf("ID: %d %x Hardstate: %v Entries: %v Snapshot: %v Messages: %v Committed: %v", s.raftId, s.raftId, rd.HardState, rd.Entries, rd.Snapshot, rd.Messages, rd.CommittedEntries)
+	s.logger.Infof("ID: %d %x Hardstate: %v Entries: %v Snapshot: %v Messages: %v Committed: %v\n", s.raftId, s.raftId, rd.HardState, rd.Entries, rd.Snapshot, rd.Messages, rd.CommittedEntries)
 	s.localRaftStore.saveEntriesAndState(rd.Entries, rd.HardState)
 
 	if !raft.IsEmptySnap(rd.Snapshot) {
@@ -184,10 +180,9 @@ func (s *sequencer) publishEntries(ents []raftpb.Entry) {
 func (s *sequencer) publishConfigChange(entry raftpb.Entry) {
 	var cc raftpb.ConfChange
 	cc.Unmarshal(entry.Data)
-	s.logger.Infof("Publishing config change: [%s]", cc.String())
+	s.logger.Infof("Publishing config change: [%s]\n", cc.String())
 	s.confState = *s.raftNode.ApplyConfChange(cc)
 	s.localRaftStore.saveConfigState(s.confState)
-	s.latestConfChangeId = cc.ID
 }
 
 func (s *sequencer) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {

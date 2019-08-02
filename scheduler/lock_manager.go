@@ -31,9 +31,10 @@ const (
 	read
 )
 
-func newLockManager() *lockManager {
+func newlockManager() *lockManager {
 	return &lockManager{
-		lockMap: make(map[uint64][]lockRequest),
+		lockMap:         make(map[uint64][]lockRequest),
+		txnsToNumWaiter: make(map[*pb.Transaction]int),
 	}
 }
 
@@ -51,7 +52,8 @@ type lockRequest struct {
 //  (b) a read lock is held by all elements of the longest prefix of the array
 //      containing only read lock requests.
 type lockManager struct {
-	lockMap map[uint64][]lockRequest
+	lockMap         map[uint64][]lockRequest
+	txnsToNumWaiter map[*pb.Transaction]int
 }
 
 func (lm *lockManager) hash(key []byte) uint64 {
@@ -66,22 +68,26 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 
 func (lm *lockManager) lock(txn *pb.Transaction) int {
 	numLocksNotAcquired := 0
+	// var keyWithoutLocks [][]byte
 	// lock the read-write set first
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, write, txn.ReadWriteSet)
+	// keyWithoutLocks = append(keyWithoutLocks, k...)
 
 	// lock read set
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
+	// keyWithoutLocks = append(keyWithoutLocks, k...)
 	return numLocksNotAcquired
 }
 
 func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byte) int {
 	numLocksNotAcquired := 0
+	// keysWithoutLock := make([][]byte, 0)
 	for i := 0; i < len(set); i++ {
 		key := set[i]
 		if lm.isKeyLocal(key) {
@@ -109,6 +115,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 				// I'm a write so I will certainly not get the lock and have to wait
 				if mode == write {
 					numLocksNotAcquired++
+					// keysWithoutLock = append(keysWithoutLock, key)
 				}
 
 				txnID, _ := ulid.ParseIdFromProto(txn.Id)
@@ -118,6 +125,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					// I know I won't be getting the lock
 					if mode == read && lockRequests[j].mode == write {
 						numLocksNotAcquired++
+						// keysWithoutLock = append(keysWithoutLock, key)
 					}
 
 					id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
@@ -164,14 +172,13 @@ func (lm *lockManager) release(txn *pb.Transaction) []lockRequest {
 }
 
 func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRequest {
-	precededByWrite := false
-	var deletedLockRequest *lockRequest
-	j := 0
-
 	for i := 0; i < len(set); i++ {
 		key := set[i]
 		keyHash := lm.hash(key)
 		lockRequests, ok := lm.lockMap[keyHash]
+		j := 0
+		precededByWrite := false
+		var deletedLockRequest *lockRequest
 
 		if ok {
 			txnID, _ := ulid.ParseIdFromProto(txnIDProto)
@@ -207,14 +214,14 @@ func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRe
 			newOwner := make([]lockRequest, 0)
 
 			if deletedLockRequest.mode == write || (deletedLockRequest.mode == write && lockRequests[j].mode == write) {
-				if lockRequests[j].mode == write {
+				if lockRequests[j].mode == write { // (a)
 					newOwner = append(newOwner, lockRequests[j])
 				}
 
-				for ; j < len(lockRequests) && lockRequests[j].mode == read; j++ {
+				for ; j < len(lockRequests) && lockRequests[j].mode == read; j++ { // (b)
 					newOwner = append(newOwner, lockRequests[j])
 				}
-			} else if !precededByWrite && deletedLockRequest.mode == write && lockRequests[j].mode == read {
+			} else if !precededByWrite && deletedLockRequest.mode == write && lockRequests[j].mode == read { // (c)
 				for ; j < len(lockRequests) && lockRequests[j].mode == read; j++ {
 					newOwner = append(newOwner, lockRequests[j])
 				}
@@ -227,6 +234,7 @@ func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRe
 	return nil
 }
 
+// order preserving remove idx ... is probably inefficient though :/
 func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequest {
 	if idx == 0 {
 		return lockRequests[1:]

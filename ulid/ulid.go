@@ -234,6 +234,8 @@ func (id *ID) ToProto() *pb.Id128 {
 	}
 }
 
+// This probably should be something like:
+// return append(id[:8], id[8:])
 func (id *ID) ToBytes() ([]byte, error) {
 	id128 := &pb.Id128{
 		Upper: util.BytesToUint64(id[:8]),

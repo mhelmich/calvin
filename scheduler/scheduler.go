@@ -17,23 +17,27 @@
 package scheduler
 
 import (
+	"fmt"
+
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 type scheduler struct {
 	sequencerChan <-chan *pb.TransactionBatch
+	readyTxnsChan chan<- *pb.Transaction
 	doneTxnChan   <-chan *pb.Transaction
-	readyTxns     chan<- *pb.Transaction
 	lockMgr       *lockManager
-
-	logger *log.Entry
+	logger        *log.Entry
 }
 
-func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, srvr *grpc.Server, logger *log.Entry) *scheduler {
+func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<- *pb.Transaction, doneTxnChan <-chan *pb.Transaction, srvr *grpc.Server, logger *log.Entry) *scheduler {
 	s := &scheduler{
 		sequencerChan: sequencerChan,
+		readyTxnsChan: readyTxnsChan,
+		doneTxnChan:   doneTxnChan,
 		lockMgr:       newLockManager(),
 		logger:        logger,
 	}
@@ -50,24 +54,30 @@ func (s *scheduler) runLockManager() {
 		select {
 		case batch := <-s.sequencerChan:
 			if batch == nil {
+				close(s.readyTxnsChan)
 				return
 			}
 
 			for idx := range batch.Transactions {
 				txn := batch.Transactions[idx]
 				if s.lockMgr.lock(txn) == 0 {
-					s.readyTxns <- txn
+					readyId, _ := ulid.ParseIdFromProto(txn.Id)
+					fmt.Printf("txn [%s] became ready\n", readyId.String())
+					s.readyTxnsChan <- txn
 				}
 			}
 
 		case txn := <-s.doneTxnChan:
 			if txn == nil {
+				close(s.readyTxnsChan)
 				return
 			}
 
 			newOwners := s.lockMgr.release(txn)
 			for idx := range newOwners {
-				s.readyTxns <- newOwners[idx].txn
+				readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+				fmt.Printf("txn [%s] became ready\n", readyId.String())
+				s.readyTxnsChan <- newOwners[idx].txn
 			}
 
 		}

@@ -17,17 +17,75 @@
 package scheduler
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 )
 
 func TestSchedulerBasic(t *testing.T) {
-	sequencerChan := make(chan *pb.TransactionBatch)
-	NewScheduler(sequencerChan, grpc.NewServer(), log.WithFields(log.Fields{
+	sequencerChan := make(chan *pb.TransactionBatch, 1)
+	readyTxns := make(chan *pb.Transaction, 1)
+	doneTxnChan := make(chan *pb.Transaction, 1)
+	NewScheduler(sequencerChan, readyTxns, doneTxnChan, grpc.NewServer(), log.WithFields(log.Fields{
 		"component": "scheduler",
 	}))
 	close(sequencerChan)
+}
+
+func TestSchedulerLocking(t *testing.T) {
+	sequencerChan := make(chan *pb.TransactionBatch, 3)
+	readyTxns := make(chan *pb.Transaction, 3)
+	doneTxnChan := make(chan *pb.Transaction, 3)
+	NewScheduler(sequencerChan, readyTxns, doneTxnChan, grpc.NewServer(), log.WithFields(log.Fields{
+		"component": "scheduler",
+	}))
+
+	id1, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn1 := &pb.Transaction{
+		Id:           id1.ToProto(),
+		ReadWriteSet: [][]byte{[]byte("key1")},
+	}
+
+	batch1 := &pb.TransactionBatch{
+		Transactions: []*pb.Transaction{txn1},
+	}
+
+	id2, err := ulid.NewId()
+	assert.Nil(t, err)
+	txn2 := &pb.Transaction{
+		Id:           id2.ToProto(),
+		ReadWriteSet: [][]byte{[]byte("key1")},
+	}
+
+	batch2 := &pb.TransactionBatch{
+		Transactions: []*pb.Transaction{txn2},
+	}
+
+	fmt.Printf("put txn [%s] into sequence\n", id1.String())
+	sequencerChan <- batch1
+	fmt.Printf("put txn [%s] into sequence\n", id2.String())
+	sequencerChan <- batch2
+
+	readyTxn1 := <-readyTxns
+	readyId1, err := ulid.ParseIdFromProto(readyTxn1.Id)
+	assert.Nil(t, err)
+	assert.Equal(t, id1.String(), readyId1.String())
+	fmt.Printf("processed txn [%s]\n", readyId1)
+	doneTxnChan <- txn1
+
+	readyTxn2 := <-readyTxns
+	readyId2, err := ulid.ParseIdFromProto(readyTxn2.Id)
+	assert.Nil(t, err)
+	assert.Equal(t, id2.String(), readyId2.String())
+	fmt.Printf("processed txn [%s]\n", readyId2)
+	doneTxnChan <- txn2
+
+	close(sequencerChan)
+	close(doneTxnChan)
 }

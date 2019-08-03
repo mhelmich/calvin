@@ -17,6 +17,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"sync"
 
@@ -55,20 +56,12 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *g
 	}
 
 	return &engine{
-		// scheduledTxnChan: scheduledTxnChan,
-		// readyToExecChan:  readyToExecChan,
 		stopChan: stopChan,
-		// store:            store,
-		// connCache:        connCache,
 	}
 }
 
 type engine struct {
-	// scheduledTxnChan <-chan *pb.Transaction
-	// readyToExecChan  <-chan *txnExecEnvironment
 	stopChan chan<- interface{}
-	// store            DataStore
-	// connCache        util.ConnectionCache
 }
 
 func (e *engine) Stop() {
@@ -165,7 +158,19 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	}
 	txn := t.(*pb.Transaction)
 
-	w.logger.Infof("ran txn: %s\n", txn.Id.String())
-
+	w.runTxn(txn)
 	w.doneTxn <- txn
+}
+
+func (w *worker) getValueFor(key []byte, keys [][]byte, values [][]byte) int {
+	for idx := range keys {
+		if bytes.Compare(keys[idx], key) == 0 {
+			return idx
+		}
+	}
+	return -1
+}
+
+func (w *worker) runTxn(txn *pb.Transaction) {
+	w.logger.Infof("ran txn: %s\n", txn.Id.String())
 }

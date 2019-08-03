@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -47,28 +48,27 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *g
 			store:            store,
 			connCache:        connCache,
 			cip:              cip,
+			txnsToExecute:    &sync.Map{},
 			logger:           logger,
 		}
 		go w.runWorker()
 	}
 
 	return &engine{
-		scheduledTxnChan: scheduledTxnChan,
-		readyToExecChan:  readyToExecChan,
-		stopChan:         stopChan,
-		store:            store,
-		nodeIDToConn:     &sync.Map{},
-		connCache:        connCache,
+		// scheduledTxnChan: scheduledTxnChan,
+		// readyToExecChan:  readyToExecChan,
+		stopChan: stopChan,
+		// store:            store,
+		// connCache:        connCache,
 	}
 }
 
 type engine struct {
-	scheduledTxnChan <-chan *pb.Transaction
-	readyToExecChan  <-chan *txnExecEnvironment
-	stopChan         chan<- interface{}
-	store            DataStore
-	nodeIDToConn     *sync.Map
-	connCache        util.ConnectionCache
+	// scheduledTxnChan <-chan *pb.Transaction
+	// readyToExecChan  <-chan *txnExecEnvironment
+	stopChan chan<- interface{}
+	// store            DataStore
+	// connCache        util.ConnectionCache
 }
 
 func (e *engine) Stop() {
@@ -78,10 +78,12 @@ func (e *engine) Stop() {
 type worker struct {
 	scheduledTxnChan <-chan *pb.Transaction
 	readyToExecChan  <-chan *txnExecEnvironment
+	doneTxn          chan<- *pb.Transaction
 	stopChan         <-chan interface{}
 	store            DataStore
 	connCache        util.ConnectionCache
 	cip              util.ClusterInfoProvider
+	txnsToExecute    *sync.Map
 	logger           *log.Entry
 }
 
@@ -122,6 +124,15 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 			localValues = append(localValues, value)
 		}
 	}
+
+	if w.cip.AmIWriter(txn.WriterNodes) {
+		id, err := ulid.ParseIdFromProto(txn.Id)
+		if err != nil {
+			w.logger.Fatalf("%s\n", err.Error())
+		}
+		w.txnsToExecute.Store(id.String(), txn)
+	}
+
 	// broadcast remote reads to all write peers
 	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues)
 }
@@ -148,5 +159,13 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
-	w.logger.Infof("ran txn: %s\n", execEnv.txnId.String())
+	t, ok := w.txnsToExecute.Load(execEnv.txnId)
+	if !ok {
+		w.logger.Fatalf("Can't find txn [%s]\n", execEnv.txnId.String())
+	}
+	txn := t.(*pb.Transaction)
+
+	w.logger.Infof("ran txn: %s\n", txn.Id.String())
+
+	w.doneTxn <- txn
 }

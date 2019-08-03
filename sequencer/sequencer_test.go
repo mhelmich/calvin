@@ -63,7 +63,7 @@ func TestSequencerBasic(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 
 	txn := &pb.Transaction{
-		WriterNodes: []int64{1, 2, 3, 4, 5, 6},
+		WriterNodes: []uint64{1, 2, 3, 4, 5, 6},
 	}
 	writerTxns <- txn
 

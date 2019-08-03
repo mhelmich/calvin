@@ -17,9 +17,7 @@
 package sequencer
 
 import (
-	"fmt"
 	"io"
-	"net"
 
 	"github.com/mhelmich/calvin/interfaces"
 	"github.com/mhelmich/calvin/pb"
@@ -28,22 +26,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-func newSequencerServer() (*sequencerServer, error) {
-	myAddress := fmt.Sprintf("%s:%d", "localhost", 9876)
-	lis, err := net.Listen("tcp", myAddress)
-
-	if err != nil {
-		return nil, err
-	}
-
-	ss := &sequencerServer{
-		grpcServer:     grpc.NewServer(),
+func newSequencerServer() *sequencerServer {
+	return &sequencerServer{
 		idsToRaftNodes: make(map[int64]*sequencer),
 	}
-
-	pb.RegisterRaftTransportServiceServer(ss.grpcServer, ss)
-	go ss.grpcServer.Serve(lis)
-	return ss, nil
 }
 
 type sequencerServer struct {

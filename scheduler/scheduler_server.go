@@ -18,43 +18,21 @@ package scheduler
 
 import (
 	"context"
-	"io"
 
 	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
 )
 
-func NewServer(logger *log.Entry) *SchedulerServer {
-	return newServerWithLog(logger, transactionLog)
-}
-
-func newServerWithLog(logger *log.Entry, log *txnLog) *SchedulerServer {
-	return &SchedulerServer{
-		log:    log,
+func newServer(logger *log.Entry) *schedulerServer {
+	return &schedulerServer{
 		logger: logger,
 	}
 }
 
-type SchedulerServer struct {
-	log    *txnLog
+type schedulerServer struct {
 	logger *log.Entry
 }
 
-func (ss *SchedulerServer) Schedule(stream pb.Scheduler_ScheduleServer) error {
-	for {
-		batch, err := stream.Recv()
-		if err == io.EOF {
-			return stream.SendAndClose(
-				&pb.SchedulerResponse{
-					Error: io.EOF.Error(),
-				},
-			)
-		}
-
-		ss.log.addBatch(batch)
-	}
-}
-
-func (ss *SchedulerServer) LowIsolationRead(context.Context, *pb.LowIsolationReadRequest) (*pb.LowIsolationReadResponse, error) {
+func (ss *schedulerServer) LowIsolationRead(context.Context, *pb.LowIsolationReadRequest) (*pb.LowIsolationReadResponse, error) {
 	return nil, nil
 }

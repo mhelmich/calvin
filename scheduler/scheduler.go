@@ -17,45 +17,59 @@
 package scheduler
 
 import (
-	"fmt"
-
 	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
-type SchedulerConfig struct {
-	SequencerChanIn <-chan *pb.TransactionBatch
-	Logger          *log.Entry
-}
-
 type scheduler struct {
-	sequencerChanIn <-chan *pb.TransactionBatch
-	logger          *log.Entry
+	sequencerChan <-chan *pb.TransactionBatch
+	doneTxnChan   <-chan *pb.Transaction
+	readyTxns     chan<- *pb.Transaction
+	lockMgr       *lockManager
+
+	logger *log.Entry
 }
 
-func NewScheduler(config *SchedulerConfig) *scheduler {
+func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, srvr *grpc.Server, logger *log.Entry) *scheduler {
 	s := &scheduler{
-		sequencerChanIn: config.SequencerChanIn,
-		logger:          config.Logger,
+		sequencerChan: sequencerChan,
+		lockMgr:       newLockManager(),
+		logger:        logger,
 	}
 
-	go s.runLockManagerLoop()
+	ss := newServer(logger)
+	pb.RegisterSchedulerServer(srvr, ss)
+
+	go s.runLockManager()
 	return s
 }
 
-func (s *scheduler) runLockManagerLoop() {
+func (s *scheduler) runLockManager() {
 	for {
 		select {
-		case batch := <-s.sequencerChanIn:
+		case batch := <-s.sequencerChan:
 			if batch == nil {
-				s.logger.Warningf("Ending scheduler loop")
 				return
 			}
-			fmt.Printf("%s", batch.String())
+
+			for idx := range batch.Transactions {
+				txn := batch.Transactions[idx]
+				if s.lockMgr.lock(txn) == 0 {
+					s.readyTxns <- txn
+				}
+			}
+
+		case txn := <-s.doneTxnChan:
+			if txn == nil {
+				return
+			}
+
+			newOwners := s.lockMgr.release(txn)
+			for idx := range newOwners {
+				s.readyTxns <- newOwners[idx].txn
+			}
+
 		}
 	}
-}
-
-func (s *scheduler) RunLowIsolationReadRequest(req *pb.LowIsolationReadRequest) *pb.LowIsolationReadResponse {
-	return nil
 }

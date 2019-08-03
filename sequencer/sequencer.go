@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -68,6 +69,10 @@ type sequencer struct {
 	// This object describes the topology of the raft group this backend is part of
 	confState raftpb.ConfState
 	logger    *log.Entry
+}
+
+func NewSequencer_(newRaftID uint64, totalServers uint64, srvr *grpc.Server, logger *log.Entry) {
+	// pb.RegisterRaftTransportServiceServer(ss.grpcServer, ss)
 }
 
 func NewSequencer(config SequencerConfig) (chan<- *pb.Transaction, chan<- *pb.Transaction, <-chan *pb.TransactionBatch, error) {

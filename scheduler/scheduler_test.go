@@ -21,16 +21,13 @@ import (
 
 	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
 )
 
 func TestSchedulerBasic(t *testing.T) {
 	sequencerChan := make(chan *pb.TransactionBatch)
-	config := &SchedulerConfig{
-		SequencerChanIn: sequencerChan,
-		Logger: log.WithFields(log.Fields{
-			"component": "scheduler",
-		}),
-	}
-	NewScheduler(config)
+	NewScheduler(sequencerChan, grpc.NewServer(), log.WithFields(log.Fields{
+		"component": "scheduler",
+	}))
 	close(sequencerChan)
 }

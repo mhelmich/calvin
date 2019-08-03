@@ -27,6 +27,7 @@ import (
 
 type ClusterInfoProvider interface {
 	IsLocal(key []byte) bool
+	AmIWriter(writerNodes []uint64) bool
 }
 
 func NewClusterInfoProvider(ownNodeID uint64) ClusterInfoProvider {
@@ -41,6 +42,15 @@ type cip struct {
 
 func (c *cip) IsLocal(key []byte) bool {
 	return isLocal(key, c.ownNodeID)
+}
+
+func (c *cip) AmIWriter(writerNodes []uint64) bool {
+	for idx := range writerNodes {
+		if writerNodes[idx] == c.ownNodeID {
+			return true
+		}
+	}
+	return false
 }
 
 type ClusterInfo struct {

@@ -47,8 +47,6 @@ message Transaction {
 
   Id128 Id = 1;
   // keys of the data objects that are being accessed
-  // do I need this at all if I have read_write_set?
-  // repeated bytes WriteSet = 2;
   repeated bytes ReadSet = 3;
   repeated bytes ReadWriteSet = 4;
 
@@ -63,8 +61,8 @@ message Transaction {
 
 message TransactionBatch {
   repeated Transaction transactions = 1;
-  uint64 Epoch = 2;
-  uint64 NodeId = 3;
+  // uint64 Epoch = 2;
+  // uint64 NodeId = 3;
 }
 
 //////////////////////////////////////////
@@ -87,7 +85,6 @@ message LowIsolationReadResponse {
 }
 
 service Scheduler {
-  rpc Schedule(stream TransactionBatch) returns (SchedulerResponse) {}
   rpc LowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
 }
 

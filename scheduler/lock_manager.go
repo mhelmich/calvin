@@ -31,7 +31,7 @@ const (
 	read
 )
 
-func newlockManager() *lockManager {
+func newLockManager() *lockManager {
 	return &lockManager{
 		lockMap:         make(map[uint64][]lockRequest),
 		txnsToNumWaiter: make(map[*pb.Transaction]int),

@@ -23,6 +23,7 @@ import (
 
 	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -63,10 +64,14 @@ func TestEngineBasic(t *testing.T) {
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) bool { return "narf" == string(b) || "moep" == string(b) },
 	)
+	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
 
 	e := NewEngine(scheduledTxnChan, mockDS, srvr, mockCC, mockCIP, log.WithFields(log.Fields{}))
 
+	id, err := ulid.NewId()
+	assert.Nil(t, err)
 	scheduledTxnChan <- &pb.Transaction{
+		Id:           id.ToProto(),
 		ReadSet:      [][]byte{[]byte("moep")},
 		ReadWriteSet: [][]byte{[]byte("narf")},
 		WriterNodes:  []uint64{99},

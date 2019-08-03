@@ -34,6 +34,7 @@ func NewConnectionCache() *connCache {
 
 type ConnectionCache interface {
 	GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error)
+	GetRaftTransportClient(nodeID uint64) (pb.RaftTransportClient, error)
 	Close()
 }
 
@@ -48,6 +49,15 @@ func (cc *connCache) GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, er
 	}
 
 	return pb.NewRemoteReadClient(conn), nil
+}
+
+func (cc *connCache) GetRaftTransportClient(nodeID uint64) (pb.RaftTransportClient, error) {
+	conn, err := cc.getConn(nodeID)
+	if err != nil {
+		return nil, err
+	}
+
+	return pb.NewRaftTransportClient(conn), nil
 }
 
 func (cc *connCache) getConn(nodeID uint64) (*grpc.ClientConn, error) {

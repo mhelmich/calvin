@@ -111,15 +111,32 @@ service RemoteRead {
 ////////////////////////////////
 // SECTION FOR THE RAFT TRANSPORT
 
-service RaftTransportService {
-  rpc Step(stream StepReq) returns (stream StepResp) {}
+message RaftPeer {
+  uint64 RaftNodeId = 1;
+  string PeerAddress = 2;
 }
 
-message StepReq {
+service RaftTransport {
+  rpc Step(StepRequest) returns (StepResponse) {}
+}
+
+message StepRequest {
   int64 RaftNodeId = 1;
   raftpb.Message Message = 2;
 }
 
-message StepResp {
+message StepResponse {
   string Error = 1;
+}
+
+//////////////////////////////////////////
+////////////////////////////////
+// SECTION FOR CALVIN
+
+message SubmitTransactionRequest {}
+
+message SubmitTransactionResponse {}
+
+service Calvin {
+  rpc SubmitTransaction(SubmitTransactionRequest) returns (SubmitTransactionResponse) {}
 }

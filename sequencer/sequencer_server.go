@@ -16,51 +16,31 @@
 
 package sequencer
 
-import (
-	"io"
+// func newSequencerServer() *sequencerServer {
+// 	return &sequencerServer{
+// 		idsToRaftNodes: make(map[int64]*sequencer),
+// 	}
+// }
+//
+// type sequencerServer struct {
+// 	idsToRaftNodes map[int64]*sequencer
+// }
 
-	"github.com/mhelmich/calvin/interfaces"
-	"github.com/mhelmich/calvin/pb"
-	log "github.com/sirupsen/logrus"
-	"go.etcd.io/etcd/raft/raftpb"
-	"google.golang.org/grpc"
-)
-
-func newSequencerServer() *sequencerServer {
-	return &sequencerServer{
-		idsToRaftNodes: make(map[int64]*sequencer),
-	}
-}
-
-type sequencerServer struct {
-	grpcServer     *grpc.Server
-	idsToRaftNodes map[int64]*sequencer
-}
-
-func (ss *sequencerServer) Step(stream pb.RaftTransportService_StepServer) error {
-	for { //ever...
-		request, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		s := ss.idsToRaftNodes[request.RaftNodeId]
-		err = s.raftNode.Step(*request.Message)
-		if err != nil {
-			return err
-		}
-
-		stream.Send(&pb.StepResp{})
-	}
-}
-
-func (ss *sequencerServer) sendMessages(msgs []raftpb.Message) *interfaces.RaftMessageSendingResults {
-	var results *interfaces.RaftMessageSendingResults
-
-	for _, msg := range msgs {
-		log.Infof("%s", msg.String())
-	}
-	return results
-}
+// func (ss *sequencerServer) Step(stream pb.RaftTransportService_StepServer) error {
+// 	for { //ever...
+// 		request, err := stream.Recv()
+// 		if err == io.EOF {
+// 			return nil
+// 		} else if err != nil {
+// 			return err
+// 		}
+//
+// 		s := ss.idsToRaftNodes[request.RaftNodeId]
+// 		err = s.raftNode.Step(*request.Message)
+// 		if err != nil {
+// 			return err
+// 		}
+//
+// 		stream.Send(&pb.StepResp{})
+// 	}
+// }

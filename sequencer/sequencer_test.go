@@ -27,41 +27,33 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/etcd/raft"
-	"go.etcd.io/etcd/raft/raftpb"
+	"google.golang.org/grpc"
 )
 
-func TestRaftBackendBasic(t *testing.T) {
+func TestSequencerBasic(t *testing.T) {
 	raftID := uint64(1)
-	proposeChan := make(chan []byte)
-	proposeConfChangeChan := make(chan raftpb.ConfChange)
 	txnBatchChan := make(chan *pb.TransactionBatch)
 	peers := []raft.Peer{raft.Peer{
 		ID:      raftID,
 		Context: []byte("narf"),
 	}}
-	storeDir := "./test-TestRaftBackendBasic-" + util.Uint64ToString(util.RandomRaftId()) + "/"
+	storeDir := "./test-TestSequencerBasic-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	defer os.RemoveAll(storeDir)
 	mockCC := new(mocks.ConnectionCache)
+	srvr := grpc.NewServer()
 	logger := log.WithFields(log.Fields{})
 
-	newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, mockCC, logger)
+	s := NewSequencer(raftID, txnBatchChan, peers, storeDir, mockCC, srvr, logger)
 	id, err := ulid.NewId()
 	assert.Nil(t, err)
-	batch := &pb.TransactionBatch{
-		Transactions: []*pb.Transaction{&pb.Transaction{
-			Id: id.ToProto(),
-		}},
-	}
-	bites, err := batch.Marshal()
-	assert.Nil(t, err)
 
-	proposeChan <- bites
-	txnBatch := <-txnBatchChan
-	assert.NotNil(t, txnBatch)
-	assert.Equal(t, 1, len(txnBatch.Transactions))
-	receivedId, err := ulid.ParseIdFromProto(txnBatch.Transactions[0].Id)
+	s.SubmitTransaction(&pb.Transaction{
+		Id: id.ToProto(),
+	})
+	sequencedTxnBatch := <-txnBatchChan
+	assert.Equal(t, 1, len(sequencedTxnBatch.Transactions))
+	sequencedTxnId, err := ulid.ParseIdFromProto(sequencedTxnBatch.Transactions[0].Id)
 	assert.Nil(t, err)
-	assert.Equal(t, id.String(), receivedId.String())
-	close(proposeChan)
-	close(proposeConfChangeChan)
+	assert.Equal(t, id.String(), sequencedTxnId.String())
+	s.Close()
 }

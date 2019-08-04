@@ -45,6 +45,7 @@ func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers
 	}
 
 	pb.RegisterRaftTransportServer(srvr, s)
+	go s.serveTxnBatches()
 	return s
 }
 
@@ -57,18 +58,18 @@ type sequencer struct {
 }
 
 // transactions and distributed snapshot reads go here
-func (s *sequencer) runWriter() {
+func (s *sequencer) serveTxnBatches() {
 	batch := &pb.TransactionBatch{}
-	raftTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
 	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
-	defer raftTicker.Stop()
 	defer batchTicker.Stop()
 
 	for {
 		select {
 		case txn := <-s.writerChan:
 			if txn == nil {
-				s.logger.Warningf("Ending writer loop")
+				s.logger.Warningf("Stop serving txn batches")
+				close(s.proposeChan)
+				close(s.proposeConfChangeChan)
 				return
 			}
 
@@ -77,7 +78,7 @@ func (s *sequencer) runWriter() {
 		case <-batchTicker.C:
 			bites, err := batch.Marshal()
 			if err != nil {
-				s.logger.Errorf("%s", err)
+				s.logger.Panicf("%s", err)
 			}
 
 			s.proposeChan <- bites
@@ -89,6 +90,10 @@ func (s *sequencer) runWriter() {
 
 func (s *sequencer) SubmitTransaction(txn *pb.Transaction) {
 	s.writerChan <- txn
+}
+
+func (s *sequencer) Close() {
+	close(s.writerChan)
 }
 
 func (s *sequencer) Step(ctx context.Context, req *pb.StepRequest) (*pb.StepResponse, error) {

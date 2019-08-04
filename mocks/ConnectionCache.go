@@ -60,3 +60,26 @@ func (_m *ConnectionCache) GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClie
 
 	return r0, r1
 }
+
+// GetSchedulerClient provides a mock function with given fields: nodeID
+func (_m *ConnectionCache) GetSchedulerClient(nodeID uint64) (pb.SchedulerClient, error) {
+	ret := _m.Called(nodeID)
+
+	var r0 pb.SchedulerClient
+	if rf, ok := ret.Get(0).(func(uint64) pb.SchedulerClient); ok {
+		r0 = rf(nodeID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(pb.SchedulerClient)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(uint64) error); ok {
+		r1 = rf(nodeID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}

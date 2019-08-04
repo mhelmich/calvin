@@ -94,6 +94,8 @@ func (rb *raftBackend) serveProposalChannels() {
 		select {
 		case prop := <-rb.proposeChan:
 			if prop == nil {
+				rb.raftNode.Stop()
+				close(rb.txnBatchChan)
 				return
 			}
 
@@ -105,6 +107,8 @@ func (rb *raftBackend) serveProposalChannels() {
 
 		case cc, ok := <-rb.proposeConfChangeChan:
 			if !ok {
+				rb.raftNode.Stop()
+				close(rb.txnBatchChan)
 				return
 			}
 
@@ -184,7 +188,6 @@ func (rb *raftBackend) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {
 
 func (rb *raftBackend) publishEntries(ents []raftpb.Entry) {
 	for idx := range ents {
-		rb.logger.Infof("leader ID: %d", rb.raftNode.Status().Lead)
 		switch ents[idx].Type {
 		case raftpb.EntryNormal:
 			rb.publishTransactionBatch(ents[idx])

@@ -59,9 +59,9 @@ func TestRaftBackendBasic(t *testing.T) {
 	txnBatch := <-txnBatchChan
 	assert.NotNil(t, txnBatch)
 	assert.Equal(t, 1, len(txnBatch.Transactions))
-	receivedId, err := ulid.ParseIdFromProto(txnBatch.Transactions[0].Id)
+	receivedID, err := ulid.ParseIdFromProto(txnBatch.Transactions[0].Id)
 	assert.Nil(t, err)
-	assert.Equal(t, id.String(), receivedId.String())
+	assert.Equal(t, id.String(), receivedID.String())
 	close(proposeChan)
 	close(proposeConfChangeChan)
 }

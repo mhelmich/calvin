@@ -23,12 +23,12 @@ import (
 	"google.golang.org/grpc"
 )
 
-func NewConnectionCache() *connCache {
+func NewConnectionCache(clusterInfoPath string) *connCache {
 	cc := &connCache{
 		nodeIDToConn: &sync.Map{},
 	}
 
-	cc.readClusterInfo("")
+	cc.readClusterInfo(clusterInfoPath)
 	return cc
 }
 

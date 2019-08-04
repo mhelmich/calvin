@@ -52,8 +52,8 @@ func TestSequencerBasic(t *testing.T) {
 	})
 	sequencedTxnBatch := <-txnBatchChan
 	assert.Equal(t, 1, len(sequencedTxnBatch.Transactions))
-	sequencedTxnId, err := ulid.ParseIdFromProto(sequencedTxnBatch.Transactions[0].Id)
+	sequencedTxnID, err := ulid.ParseIdFromProto(sequencedTxnBatch.Transactions[0].Id)
 	assert.Nil(t, err)
-	assert.Equal(t, id.String(), sequencedTxnId.String())
+	assert.Equal(t, id.String(), sequencedTxnID.String())
 	s.Close()
 }

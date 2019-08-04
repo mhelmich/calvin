@@ -71,12 +71,12 @@ var staticClusterInfo ClusterInfo
 func readClusterInfo(path string) {
 	f, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("%s\n", err.Error())
+		log.Panicf("%s\n", err.Error())
 	}
 	defer f.Close()
 
 	if err := toml.NewDecoder(f).Decode(&staticClusterInfo); err != nil {
-		log.Fatalf("%s\n", err.Error())
+		log.Panicf("%s\n", err.Error())
 	}
 }
 

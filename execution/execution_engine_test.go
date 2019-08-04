@@ -32,7 +32,7 @@ import (
 
 func TestEngineBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
-	mockDS := new(mocks.Storage)
+	mockDS := new(mocks.DataStore)
 	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)

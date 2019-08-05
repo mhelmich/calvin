@@ -20,13 +20,30 @@ import (
 	"os"
 	"testing"
 
+	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCalvinBasic(t *testing.T) {
+func TestCalvinStartStop(t *testing.T) {
 	c := NewCalvin("./config.toml", "./cluster_info.toml")
 	assert.NotNil(t, c.cc)
 	assert.NotNil(t, c.cip)
+	c.Stop()
+	defer os.RemoveAll("./calvin-1")
+}
+
+func TestCalvinPushTxns(t *testing.T) {
+	c := NewCalvin("./config.toml", "./cluster_info.toml")
+
+	for i := 0; i < 10; i++ {
+		id, err := ulid.NewId()
+		assert.Nil(t, err)
+		c.SubmitTransaction(&pb.Transaction{
+			Id: id.ToProto(),
+		})
+	}
+
 	c.Stop()
 	defer os.RemoveAll("./calvin-1")
 }

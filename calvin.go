@@ -17,6 +17,7 @@
 package calvin
 
 import (
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -46,7 +47,10 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	cc := util.NewConnectionCache(clusterInfoPath)
 	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
 	srvr := grpc.NewServer()
-	logger := log.WithFields(log.Fields{})
+	logger := log.WithFields(log.Fields{
+		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(cfg.RaftID)),
+		"raftId":    util.Uint64ToString(cfg.RaftID),
+	})
 	myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
 
 	txnBatchChan := make(chan *pb.TransactionBatch)
@@ -95,6 +99,10 @@ type Calvin struct {
 func (c *Calvin) Stop() {
 	c.grpcSrvr.Stop()
 	c.seq.Stop()
+}
+
+func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {
+	c.seq.SubmitTransaction(txn)
 }
 
 func readConfig(path string) config {

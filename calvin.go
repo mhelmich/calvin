@@ -17,44 +17,42 @@
 package calvin
 
 import (
-	"fmt"
 	"os"
 
+	"github.com/mhelmich/calvin/util"
 	"github.com/naoina/toml"
+	log "github.com/sirupsen/logrus"
 )
 
 type config struct {
-	Servers struct {
-		Self struct {
-			NodeID     uint64
-			Role       string
-			Hostname   string
-			Port       int
-			Partitions []int
-		}
-		NumberPrimaries uint64
+	RaftID   uint64
+	Hostname string
+	Port     int
+}
+
+func NewCalvin(configPath string, clusterInfoPath string) *calvin {
+	cfg := readConfig(configPath)
+	return &calvin{
+		cc:  util.NewConnectionCache(clusterInfoPath),
+		cip: util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath),
 	}
 }
 
-func (c *config) String() string {
-	return fmt.Sprintf("NodeID: %d Role: %s NumberPrimaries: %d", c.Servers.Self.NodeID, c.Servers.Self.Role, c.Servers.NumberPrimaries)
-}
-
-func NewCalvin(configPath string) {
-	c := readConfig(configPath)
-	fmt.Printf(c.String())
+type calvin struct {
+	cip util.ClusterInfoProvider
+	cc  util.ConnectionCache
 }
 
 func readConfig(path string) config {
 	f, err := os.Open(path)
 	if err != nil {
-		panic(err)
+		log.Panicf("%s\n", err.Error())
 	}
 	defer f.Close()
 
 	var config config
 	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		panic(err)
+		log.Panicf("%s\n", err.Error())
 	}
 
 	return config

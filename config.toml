@@ -14,19 +14,6 @@
 #  limitations under the License.
 #
 
-[servers]
-number_primaries = 2
-
-  [self]
-  node_id = 1
-  role = "primary"
-  hostname = "localhost"
-  port = 5432
-  partitions = [1, 3, 5]
-
-  [otherOne]
-  node_id = 2
-  role = "primary"
-  hostname = "localhost"
-  port = 5433
-  partitions = [2, 4, 6]
+raft_id = 1
+hostname = "localhost"
+port = 5432

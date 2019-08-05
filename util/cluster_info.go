@@ -17,12 +17,11 @@
 package util
 
 import (
-	"fmt"
 	"hash/fnv"
-	"log"
 	"os"
 
 	"github.com/naoina/toml"
+	log "github.com/sirupsen/logrus"
 )
 
 type ClusterInfoProvider interface {
@@ -30,18 +29,29 @@ type ClusterInfoProvider interface {
 	AmIWriter(writerNodes []uint64) bool
 }
 
-func NewClusterInfoProvider(ownNodeID uint64) ClusterInfoProvider {
+func NewClusterInfoProvider(ownNodeID uint64, pathToClusterInfo string) ClusterInfoProvider {
 	return &cip{
 		ownNodeID: ownNodeID,
+		ci:        readClusterInfo(pathToClusterInfo),
 	}
 }
 
 type cip struct {
 	ownNodeID uint64
+	ci        ClusterInfo
 }
 
 func (c *cip) IsLocal(key []byte) bool {
-	return isLocal(key, c.ownNodeID)
+	hasher := fnv.New64()
+	hasher.Write(key)
+	partition := int(hasher.Sum64() % uint64(staticClusterInfo.NumberPartitions))
+	node := staticClusterInfo.Nodes[c.ownNodeID]
+	for idx := range node.Partitions {
+		if node.Partitions[idx] == partition {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *cip) AmIWriter(writerNodes []uint64) bool {
@@ -60,7 +70,7 @@ type ClusterInfo struct {
 }
 
 type Node struct {
-	NodeID     uint64
+	ID         uint64
 	Hostname   string
 	Port       int
 	Partitions []int
@@ -68,7 +78,7 @@ type Node struct {
 
 var staticClusterInfo ClusterInfo
 
-func readClusterInfo(path string) {
+func readClusterInfo(path string) ClusterInfo {
 	f, err := os.Open(path)
 	if err != nil {
 		log.Panicf("%s\n", err.Error())
@@ -78,22 +88,6 @@ func readClusterInfo(path string) {
 	if err := toml.NewDecoder(f).Decode(&staticClusterInfo); err != nil {
 		log.Panicf("%s\n", err.Error())
 	}
-}
 
-func isLocal(key []byte, nodeID uint64) bool {
-	hasher := fnv.New64()
-	hasher.Write(key)
-	partition := int(hasher.Sum64() % uint64(staticClusterInfo.NumberPartitions))
-	node := staticClusterInfo.Nodes[nodeID]
-	for idx := range node.Partitions {
-		if node.Partitions[idx] == partition {
-			return true
-		}
-	}
-	return false
-}
-
-func getAddressForNodeID(nodeID uint64) string {
-	info := staticClusterInfo.Nodes[nodeID]
-	return fmt.Sprintf("%s:%d", info.Hostname, info.Port)
+	return staticClusterInfo
 }

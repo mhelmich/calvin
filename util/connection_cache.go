@@ -17,6 +17,7 @@
 package util
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -26,9 +27,9 @@ import (
 func NewConnectionCache(clusterInfoPath string) *connCache {
 	cc := &connCache{
 		nodeIDToConn: &sync.Map{},
+		ci:           readClusterInfo(clusterInfoPath),
 	}
 
-	cc.readClusterInfo(clusterInfoPath)
 	return cc
 }
 
@@ -41,6 +42,7 @@ type ConnectionCache interface {
 
 type connCache struct {
 	nodeIDToConn *sync.Map
+	ci           ClusterInfo
 }
 
 func (cc *connCache) GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error) {
@@ -71,7 +73,7 @@ func (cc *connCache) GetSchedulerClient(nodeID uint64) (pb.SchedulerClient, erro
 }
 
 func (cc *connCache) getConn(nodeID uint64) (*grpc.ClientConn, error) {
-	addr := cc.getAddressForNodeID(nodeID)
+	addr := cc.getAddressFor(nodeID)
 	c, ok := cc.nodeIDToConn.Load(nodeID)
 
 	if !ok {
@@ -98,10 +100,7 @@ func (cc *connCache) Close() {
 	})
 }
 
-func (cc *connCache) getAddressForNodeID(id uint64) string {
-	return ""
-}
-
-func (cc *connCache) readClusterInfo(path string) {
-	readClusterInfo(path)
+func (cc *connCache) getAddressFor(nodeID uint64) string {
+	info := staticClusterInfo.Nodes[nodeID]
+	return fmt.Sprintf("%s:%d", info.Hostname, info.Port)
 }

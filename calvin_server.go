@@ -20,29 +20,27 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/mhelmich/calvin/pb"
-	"github.com/mhelmich/calvin/scheduler"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
-type server struct {
+type calvinServer struct {
 	grpcServer *grpc.Server
 	logger     *log.Entry
 }
 
-func newServer(hostname string, port int, logger *log.Entry) {
+func newCalvinServer(hostname string, port int, logger *log.Entry) {
 	myAddress := fmt.Sprintf("%s:%d", hostname, port)
 	lis, err := net.Listen("tcp", myAddress)
 	if err != nil {
 		logger.Panicf("failed to listen: %v", err)
 	}
 
-	s := &server{
+	s := &calvinServer{
 		grpcServer: grpc.NewServer(),
 		logger:     logger,
 	}
 
-	pb.RegisterSchedulerServer(s.grpcServer, scheduler.NewServer(logger))
+	// pb.RegisterSchedulerServer(s.grpcServer, s)
 	go s.grpcServer.Serve(lis)
 }

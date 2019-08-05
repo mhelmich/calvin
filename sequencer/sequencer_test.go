@@ -55,5 +55,5 @@ func TestSequencerBasic(t *testing.T) {
 	sequencedTxnID, err := ulid.ParseIdFromProto(sequencedTxnBatch.Transactions[0].Id)
 	assert.Nil(t, err)
 	assert.Equal(t, id.String(), sequencedTxnID.String())
-	s.Close()
+	s.Stop()
 }

@@ -19,10 +19,12 @@ package util
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"net"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -78,4 +80,18 @@ func IsSyncMapEmpty(m *sync.Map) bool {
 		return false
 	})
 	return isEmpty
+}
+
+// get preferred outbound ip of this machine
+func OutboundIP() net.IP {
+	// google dns
+	// the address may not exist
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err != nil {
+		logrus.Panicf("%s\n", err.Error())
+	}
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	// get the IP from an open connection
+	return localAddr.IP
 }

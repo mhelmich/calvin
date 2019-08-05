@@ -17,3 +17,4 @@
 raft_id = 1
 hostname = "localhost"
 port = 5432
+store_path = "./calvin-"

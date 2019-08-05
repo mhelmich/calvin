@@ -17,30 +17,84 @@
 package calvin
 
 import (
+	"fmt"
+	"net"
 	"os"
+	"strings"
 
+	"github.com/mhelmich/calvin/execution"
+	"github.com/mhelmich/calvin/mocks"
+	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/scheduler"
+	"github.com/mhelmich/calvin/sequencer"
 	"github.com/mhelmich/calvin/util"
 	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
+	"go.etcd.io/etcd/raft"
+	"google.golang.org/grpc"
 )
 
 type config struct {
-	RaftID   uint64
-	Hostname string
-	Port     int
+	RaftID    uint64
+	Hostname  string
+	Port      int
+	StorePath string
 }
 
-func NewCalvin(configPath string, clusterInfoPath string) *calvin {
+func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	cfg := readConfig(configPath)
-	return &calvin{
-		cc:  util.NewConnectionCache(clusterInfoPath),
-		cip: util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath),
+	cc := util.NewConnectionCache(clusterInfoPath)
+	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
+	srvr := grpc.NewServer()
+	logger := log.WithFields(log.Fields{})
+	myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
+
+	txnBatchChan := make(chan *pb.TransactionBatch)
+	peers := []raft.Peer{raft.Peer{
+		ID:      cfg.RaftID,
+		Context: []byte(myAddress),
+	}}
+	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
+	if !strings.HasSuffix(storeDir, "/") {
+		storeDir = storeDir + "/"
+	}
+	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, srvr, logger)
+
+	readyTxns := make(chan *pb.Transaction)
+	doneTxnChan := make(chan *pb.Transaction)
+	sched := scheduler.NewScheduler(txnBatchChan, readyTxns, doneTxnChan, srvr, logger)
+
+	mockDS := new(mocks.DataStore)
+	engine := execution.NewEngine(readyTxns, mockDS, srvr, cc, cip, logger)
+
+	lis, err := net.Listen("tcp", myAddress)
+	if err != nil {
+		logger.Panicf("%s\n", err.Error())
+	}
+	go srvr.Serve(lis)
+
+	return &Calvin{
+		cc:       cc,
+		cip:      cip,
+		seq:      seq,
+		sched:    sched,
+		engine:   engine,
+		grpcSrvr: srvr,
 	}
 }
 
-type calvin struct {
-	cip util.ClusterInfoProvider
-	cc  util.ConnectionCache
+type Calvin struct {
+	cip      util.ClusterInfoProvider
+	cc       util.ConnectionCache
+	seq      *sequencer.Sequencer
+	sched    *scheduler.Scheduler
+	engine   *execution.Engine
+	grpcSrvr *grpc.Server
+}
+
+func (c *Calvin) Stop() {
+	c.grpcSrvr.Stop()
+	c.seq.Stop()
 }
 
 func readConfig(path string) config {

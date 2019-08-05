@@ -17,6 +17,7 @@
 package calvin
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,4 +27,6 @@ func TestCalvinBasic(t *testing.T) {
 	c := NewCalvin("./config.toml", "./cluster_info.toml")
 	assert.NotNil(t, c.cc)
 	assert.NotNil(t, c.cip)
+	c.Stop()
+	defer os.RemoveAll("./calvin-1")
 }

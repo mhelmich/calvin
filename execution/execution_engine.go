@@ -33,19 +33,16 @@ type DataStore interface {
 	Set(key []byte, value []byte)
 }
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *engine {
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, 11)
 
 	rrs := newRemoteReadServer(readyToExecChan)
 	pb.RegisterRemoteReadServer(srvr, rrs)
 
-	stopChan := make(chan interface{})
-
 	for i := 0; i < 2; i++ {
 		w := worker{
 			scheduledTxnChan: scheduledTxnChan,
 			readyToExecChan:  readyToExecChan,
-			stopChan:         stopChan,
 			store:            store,
 			connCache:        connCache,
 			cip:              cip,
@@ -55,24 +52,15 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *g
 		go w.runWorker()
 	}
 
-	return &engine{
-		stopChan: stopChan,
-	}
+	return &Engine{}
 }
 
-type engine struct {
-	stopChan chan<- interface{}
-}
-
-func (e *engine) Stop() {
-	close(e.stopChan)
-}
+type Engine struct{}
 
 type worker struct {
 	scheduledTxnChan <-chan *pb.Transaction
 	readyToExecChan  <-chan *txnExecEnvironment
 	doneTxn          chan<- *pb.Transaction
-	stopChan         <-chan interface{}
 	store            DataStore
 	connCache        util.ConnectionCache
 	cip              util.ClusterInfoProvider
@@ -85,14 +73,15 @@ func (w *worker) runWorker() {
 		select {
 		// wait for txns to be scheduled
 		case txn := <-w.scheduledTxnChan:
+			if txn == nil {
+				return
+			}
 			w.processScheduledTxn(txn, w.store)
 
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
 			w.runReadyTxn(execEnv)
 
-		case <-w.stopChan:
-			return
 		}
 	}
 }
@@ -121,7 +110,7 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 	if w.cip.AmIWriter(txn.WriterNodes) {
 		id, err := ulid.ParseIdFromProto(txn.Id)
 		if err != nil {
-			w.logger.Fatalf("%s\n", err.Error())
+			w.logger.Panicf("%s\n", err.Error())
 		}
 		w.txnsToExecute.Store(id.String(), txn)
 	}
@@ -134,7 +123,7 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 	for idx := range txn.WriterNodes {
 		client, err := w.connCache.GetRemoteReadClient(txn.WriterNodes[idx])
 		if err != nil {
-			w.logger.Fatalf("%s\n", err.Error())
+			w.logger.Panicf("%s\n", err.Error())
 		}
 
 		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{
@@ -144,9 +133,9 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 			Values:        values,
 		})
 		if err != nil {
-			w.logger.Fatalf("%s\n", err.Error())
+			w.logger.Panicf("%s\n", err.Error())
 		} else if resp.Error != "" {
-			w.logger.Fatalf("%s\n", resp.Error)
+			w.logger.Panicf("%s\n", resp.Error)
 		}
 	}
 }
@@ -154,7 +143,7 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	t, ok := w.txnsToExecute.Load(execEnv.txnId)
 	if !ok {
-		w.logger.Fatalf("Can't find txn [%s]\n", execEnv.txnId.String())
+		w.logger.Panicf("Can't find txn [%s]\n", execEnv.txnId.String())
 	}
 	txn := t.(*pb.Transaction)
 

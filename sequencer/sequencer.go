@@ -32,11 +32,11 @@ const (
 	sequencerBatchFrequencyMs = 100
 )
 
-func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, srvr *grpc.Server, logger *log.Entry) *sequencer {
+func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, srvr *grpc.Server, logger *log.Entry) *Sequencer {
 	proposeChan := make(chan []byte)
 	proposeConfChangeChan := make(chan raftpb.ConfChange)
 	writerChan := make(chan *pb.Transaction)
-	s := &sequencer{
+	s := &Sequencer{
 		proposeChan:           proposeChan,
 		proposeConfChangeChan: proposeConfChangeChan,
 		writerChan:            writerChan,
@@ -49,7 +49,7 @@ func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers
 	return s
 }
 
-type sequencer struct {
+type Sequencer struct {
 	rb                    *raftBackend
 	proposeChan           chan<- []byte
 	proposeConfChangeChan chan<- raftpb.ConfChange
@@ -58,7 +58,7 @@ type sequencer struct {
 }
 
 // transactions and distributed snapshot reads go here
-func (s *sequencer) serveTxnBatches() {
+func (s *Sequencer) serveTxnBatches() {
 	batch := &pb.TransactionBatch{}
 	batchTicker := time.NewTicker(sequencerBatchFrequencyMs * time.Millisecond)
 	defer batchTicker.Stop()
@@ -88,15 +88,15 @@ func (s *sequencer) serveTxnBatches() {
 	}
 }
 
-func (s *sequencer) SubmitTransaction(txn *pb.Transaction) {
+func (s *Sequencer) SubmitTransaction(txn *pb.Transaction) {
 	s.writerChan <- txn
 }
 
-func (s *sequencer) Close() {
+func (s *Sequencer) Stop() {
 	close(s.writerChan)
 }
 
-func (s *sequencer) Step(ctx context.Context, req *pb.StepRequest) (*pb.StepResponse, error) {
+func (s *Sequencer) Step(ctx context.Context, req *pb.StepRequest) (*pb.StepResponse, error) {
 	err := s.rb.step(ctx, *req.Message)
 	return &pb.StepResponse{}, err
 }

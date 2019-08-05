@@ -25,7 +25,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type scheduler struct {
+type Scheduler struct {
 	sequencerChan <-chan *pb.TransactionBatch
 	readyTxnsChan chan<- *pb.Transaction
 	doneTxnChan   <-chan *pb.Transaction
@@ -33,8 +33,8 @@ type scheduler struct {
 	logger        *log.Entry
 }
 
-func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<- *pb.Transaction, doneTxnChan <-chan *pb.Transaction, srvr *grpc.Server, logger *log.Entry) *scheduler {
-	s := &scheduler{
+func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<- *pb.Transaction, doneTxnChan <-chan *pb.Transaction, srvr *grpc.Server, logger *log.Entry) *Scheduler {
+	s := &Scheduler{
 		sequencerChan: sequencerChan,
 		readyTxnsChan: readyTxnsChan,
 		doneTxnChan:   doneTxnChan,
@@ -49,7 +49,7 @@ func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<
 	return s
 }
 
-func (s *scheduler) runLockManager() {
+func (s *Scheduler) runLockManager() {
 	for {
 		select {
 		case batch := <-s.sequencerChan:

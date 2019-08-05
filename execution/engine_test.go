@@ -18,8 +18,8 @@ package execution
 
 import (
 	"context"
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
@@ -32,6 +32,7 @@ import (
 
 func TestEngineBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
+	doneTxnChan := make(chan *pb.Transaction)
 	mockDS := new(mocks.DataStore)
 	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
@@ -66,18 +67,87 @@ func TestEngineBasic(t *testing.T) {
 	)
 	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
 
-	NewEngine(scheduledTxnChan, mockDS, srvr, mockCC, mockCIP, log.WithFields(log.Fields{}))
+	NewEngine(scheduledTxnChan, doneTxnChan, mockDS, srvr, mockCC, mockCIP, log.WithFields(log.Fields{}))
 
-	id, err := ulid.NewId()
+	txnID, err := ulid.NewId()
 	assert.Nil(t, err)
 	scheduledTxnChan <- &pb.Transaction{
-		Id:           id.ToProto(),
+		Id:           txnID.ToProto(),
 		ReadSet:      [][]byte{[]byte("moep")},
 		ReadWriteSet: [][]byte{[]byte("narf")},
 		WriterNodes:  []uint64{99},
 	}
 
-	time.Sleep(10 * time.Millisecond)
-	// e.Stop()
+	close(scheduledTxnChan)
+}
+
+func TestWorkerBasic(t *testing.T) {
+	scheduledTxnChan := make(chan *pb.Transaction)
+	readyToExecChan := make(chan *txnExecEnvironment, 1)
+	doneTxnChan := make(chan *pb.Transaction)
+	mockDS := new(mocks.DataStore)
+	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
+		func(b []byte) []byte { return []byte(string(b) + "_value") },
+	)
+
+	mockRRC := new(mocks.RemoteReadClient)
+	mockRRC.On("RemoteRead", mock.Anything, mock.AnythingOfType("*pb.RemoteReadRequest")).Run(
+		func(args mock.Arguments) {
+			req := args[1].(*pb.RemoteReadRequest)
+			assert.Equal(t, 2, len(req.Keys))
+			assert.Equal(t, 2, len(req.Values))
+			assert.Equal(t, []byte("moep"), req.Keys[0])
+			assert.Equal(t, []byte("moep_value"), req.Values[0])
+			assert.Equal(t, []byte("narf"), req.Keys[1])
+			assert.Equal(t, []byte("narf_value"), req.Values[1])
+			assert.Equal(t, uint32(2), req.TotalNumLocks)
+		},
+	).Return(
+		func(arg1 context.Context, arg2 *pb.RemoteReadRequest, arg3 ...grpc.CallOption) *pb.RemoteReadResponse {
+			return &pb.RemoteReadResponse{}
+		},
+		func(arg1 context.Context, arg2 *pb.RemoteReadRequest, arg3 ...grpc.CallOption) error { return nil },
+	)
+
+	mockCC := new(mocks.ConnectionCache)
+	mockCC.On("GetRemoteReadClient", mock.AnythingOfType("uint64")).Return(mockRRC, nil)
+
+	mockCIP := new(mocks.ClusterInfoProvider)
+	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(
+		func(b []byte) bool { return "narf" == string(b) || "moep" == string(b) },
+	)
+	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
+
+	txnsToExecute := &sync.Map{}
+	logger := log.WithFields(log.Fields{})
+
+	w := worker{
+		scheduledTxnChan: scheduledTxnChan,
+		readyToExecChan:  readyToExecChan,
+		doneTxnChan:      doneTxnChan,
+		store:            mockDS,
+		connCache:        mockCC,
+		cip:              mockCIP,
+		txnsToExecute:    txnsToExecute,
+		logger:           logger,
+	}
+	go w.runWorker()
+
+	id, err := ulid.NewId()
+	assert.Nil(t, err)
+
+	txn := &pb.Transaction{
+		Id: id.ToProto(),
+	}
+	txnsToExecute.Store(id.String(), txn)
+
+	readyToExecChan <- &txnExecEnvironment{
+		txnId: id,
+	}
+
+	doneTxn := <-doneTxnChan
+	doneID, err := ulid.ParseIdFromProto(doneTxn.Id)
+	assert.Nil(t, err)
+	assert.Equal(t, id.String(), doneID.String())
 	close(scheduledTxnChan)
 }

@@ -23,12 +23,14 @@ import (
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
+	log "github.com/sirupsen/logrus"
 )
 
-func newRemoteReadServer(readyToExecChan chan<- *txnExecEnvironment) *remoteReadServer {
+func newRemoteReadServer(readyToExecChan chan<- *txnExecEnvironment, logger *log.Entry) *remoteReadServer {
 	return &remoteReadServer{
 		txnIdToTxnExecEnv: &sync.Map{},
 		readyToExecChan:   readyToExecChan,
+		logger:            logger,
 	}
 }
 
@@ -46,6 +48,7 @@ func (e *txnExecEnvironment) String() string {
 type remoteReadServer struct {
 	txnIdToTxnExecEnv *sync.Map // looks like map[string]*txnExecEnvironment
 	readyToExecChan   chan<- *txnExecEnvironment
+	logger            *log.Entry
 }
 
 func (rrs *remoteReadServer) RemoteRead(ctx context.Context, req *pb.RemoteReadRequest) (*pb.RemoteReadResponse, error) {

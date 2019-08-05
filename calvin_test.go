@@ -19,6 +19,7 @@ package calvin
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
@@ -26,24 +27,29 @@ import (
 )
 
 func TestCalvinStartStop(t *testing.T) {
+	os.RemoveAll("./calvin-1")
 	c := NewCalvin("./config.toml", "./cluster_info.toml")
 	assert.NotNil(t, c.cc)
 	assert.NotNil(t, c.cip)
 	c.Stop()
-	defer os.RemoveAll("./calvin-1")
+	os.RemoveAll("./calvin-1")
 }
 
 func TestCalvinPushTxns(t *testing.T) {
+	os.RemoveAll("./calvin-1")
 	c := NewCalvin("./config.toml", "./cluster_info.toml")
 
 	for i := 0; i < 10; i++ {
 		id, err := ulid.NewId()
 		assert.Nil(t, err)
 		c.SubmitTransaction(&pb.Transaction{
-			Id: id.ToProto(),
+			Id:           id.ToProto(),
+			WriterNodes:  []uint64{1},
+			ReadWriteSet: [][]byte{[]byte("narf")},
 		})
 	}
 
+	time.Sleep(3 * time.Second)
 	c.Stop()
-	defer os.RemoveAll("./calvin-1")
+	os.RemoveAll("./calvin-1")
 }

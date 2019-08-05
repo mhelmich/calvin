@@ -22,9 +22,9 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/mhelmich/calvin/execution"
-	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/scheduler"
 	"github.com/mhelmich/calvin/sequencer"
@@ -51,7 +51,9 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(cfg.RaftID)),
 		"raftId":    util.Uint64ToString(cfg.RaftID),
 	})
-	myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
+	// myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
+	myAddress := fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port)
+	// fmt.Printf("my address[%s]\n", myAddress)
 
 	txnBatchChan := make(chan *pb.TransactionBatch)
 	peers := []raft.Peer{raft.Peer{
@@ -68,8 +70,8 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	doneTxnChan := make(chan *pb.Transaction)
 	sched := scheduler.NewScheduler(txnBatchChan, readyTxns, doneTxnChan, srvr, logger)
 
-	mockDS := new(mocks.DataStore)
-	engine := execution.NewEngine(readyTxns, mockDS, srvr, cc, cip, logger)
+	dataStore := newBoltDataStore(storeDir, logger)
+	engine := execution.NewEngine(readyTxns, doneTxnChan, dataStore, srvr, cc, cip, logger)
 
 	lis, err := net.Listen("tcp", myAddress)
 	if err != nil {
@@ -78,27 +80,31 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	go srvr.Serve(lis)
 
 	return &Calvin{
-		cc:       cc,
-		cip:      cip,
-		seq:      seq,
-		sched:    sched,
-		engine:   engine,
-		grpcSrvr: srvr,
+		cc:        cc,
+		cip:       cip,
+		seq:       seq,
+		sched:     sched,
+		engine:    engine,
+		grpcSrvr:  srvr,
+		dataStore: dataStore,
 	}
 }
 
 type Calvin struct {
-	cip      util.ClusterInfoProvider
-	cc       util.ConnectionCache
-	seq      *sequencer.Sequencer
-	sched    *scheduler.Scheduler
-	engine   *execution.Engine
-	grpcSrvr *grpc.Server
+	cip       util.ClusterInfoProvider
+	cc        util.ConnectionCache
+	seq       *sequencer.Sequencer
+	sched     *scheduler.Scheduler
+	engine    *execution.Engine
+	grpcSrvr  *grpc.Server
+	dataStore *boltDataStore
 }
 
 func (c *Calvin) Stop() {
 	c.grpcSrvr.Stop()
 	c.seq.Stop()
+	time.Sleep(time.Second)
+	c.dataStore.close()
 }
 
 func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {

@@ -23,12 +23,14 @@ import (
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRemoteReadServer(t *testing.T) {
 	readyExecEnvChan := make(chan *txnExecEnvironment, 1)
-	rrs := newRemoteReadServer(readyExecEnvChan)
+	logger := log.WithFields(log.Fields{})
+	rrs := newRemoteReadServer(readyExecEnvChan, logger)
 
 	id, err := ulid.NewId()
 	assert.Nil(t, err)

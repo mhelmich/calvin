@@ -33,20 +33,22 @@ type DataStore interface {
 	Set(key []byte, value []byte)
 }
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
-	readyToExecChan := make(chan *txnExecEnvironment, 11)
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
+	readyToExecChan := make(chan *txnExecEnvironment, 1)
 
-	rrs := newRemoteReadServer(readyToExecChan)
+	rrs := newRemoteReadServer(readyToExecChan, logger)
 	pb.RegisterRemoteReadServer(srvr, rrs)
+	txnsToExecute := &sync.Map{}
 
 	for i := 0; i < 2; i++ {
 		w := worker{
 			scheduledTxnChan: scheduledTxnChan,
 			readyToExecChan:  readyToExecChan,
+			doneTxnChan:      doneTxnChan,
 			store:            store,
 			connCache:        connCache,
 			cip:              cip,
-			txnsToExecute:    &sync.Map{},
+			txnsToExecute:    txnsToExecute,
 			logger:           logger,
 		}
 		go w.runWorker()
@@ -60,7 +62,7 @@ type Engine struct{}
 type worker struct {
 	scheduledTxnChan <-chan *pb.Transaction
 	readyToExecChan  <-chan *txnExecEnvironment
-	doneTxn          chan<- *pb.Transaction
+	doneTxnChan      chan<- *pb.Transaction
 	store            DataStore
 	connCache        util.ConnectionCache
 	cip              util.ClusterInfoProvider
@@ -74,6 +76,7 @@ func (w *worker) runWorker() {
 		// wait for txns to be scheduled
 		case txn := <-w.scheduledTxnChan:
 			if txn == nil {
+				w.logger.Warningf("Execution worker shutting down")
 				return
 			}
 			w.processScheduledTxn(txn, w.store)
@@ -112,6 +115,7 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 		if err != nil {
 			w.logger.Panicf("%s\n", err.Error())
 		}
+
 		w.txnsToExecute.Store(id.String(), txn)
 	}
 
@@ -141,14 +145,15 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
-	t, ok := w.txnsToExecute.Load(execEnv.txnId)
+	t, ok := w.txnsToExecute.Load(execEnv.txnId.String())
 	if !ok {
 		w.logger.Panicf("Can't find txn [%s]\n", execEnv.txnId.String())
 	}
+	w.txnsToExecute.Delete(execEnv.txnId.String())
 	txn := t.(*pb.Transaction)
 
 	w.runTxn(txn)
-	w.doneTxn <- txn
+	w.doneTxnChan <- txn
 }
 
 func (w *worker) getValueFor(key []byte, keys [][]byte, values [][]byte) int {
@@ -161,5 +166,9 @@ func (w *worker) getValueFor(key []byte, keys [][]byte, values [][]byte) int {
 }
 
 func (w *worker) runTxn(txn *pb.Transaction) {
-	w.logger.Infof("ran txn: %s\n", txn.Id.String())
+	id, err := ulid.ParseIdFromProto(txn.Id)
+	if err != nil {
+		w.logger.Panicf("Can't parse txn id: %s", err.Error())
+	}
+	w.logger.Infof("ran txn: %s\n", id.String())
 }

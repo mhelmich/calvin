@@ -17,10 +17,7 @@
 package scheduler
 
 import (
-	"fmt"
-
 	"github.com/mhelmich/calvin/pb"
-	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -61,8 +58,8 @@ func (s *Scheduler) runLockManager() {
 			for idx := range batch.Transactions {
 				txn := batch.Transactions[idx]
 				if s.lockMgr.lock(txn) == 0 {
-					readyId, _ := ulid.ParseIdFromProto(txn.Id)
-					fmt.Printf("txn [%s] became ready\n", readyId.String())
+					// readyId, _ := ulid.ParseIdFromProto(txn.Id)
+					// fmt.Printf("txn [%s] became ready\n", readyId.String())
 					s.readyTxnsChan <- txn
 				}
 			}
@@ -75,8 +72,8 @@ func (s *Scheduler) runLockManager() {
 
 			newOwners := s.lockMgr.release(txn)
 			for idx := range newOwners {
-				readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
-				fmt.Printf("txn [%s] became ready\n", readyId.String())
+				// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+				// fmt.Printf("txn [%s] became ready\n", readyId.String())
 				s.readyTxnsChan <- newOwners[idx].txn
 			}
 

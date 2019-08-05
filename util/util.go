@@ -82,6 +82,15 @@ func IsSyncMapEmpty(m *sync.Map) bool {
 	return isEmpty
 }
 
+func LenSyncMap(m *sync.Map) int {
+	var i int
+	m.Range(func(key, value interface{}) bool {
+		i++
+		return true
+	})
+	return i
+}
+
 // get preferred outbound ip of this machine
 func OutboundIP() net.IP {
 	// google dns

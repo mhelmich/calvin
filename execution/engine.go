@@ -19,6 +19,7 @@ package execution
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -27,11 +28,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
-
-type DataStore interface {
-	Get(key []byte) []byte
-	Set(key []byte, value []byte)
-}
 
 func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
@@ -152,23 +148,42 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	w.txnsToExecute.Delete(execEnv.txnId.String())
 	txn := t.(*pb.Transaction)
 
-	w.runTxn(txn)
+	w.runTxn(txn, execEnv)
 	w.doneTxnChan <- txn
 }
 
-func (w *worker) getValueFor(key []byte, keys [][]byte, values [][]byte) int {
-	for idx := range keys {
-		if bytes.Compare(keys[idx], key) == 0 {
+func (w *worker) getValueFor(key []byte, execEnv *txnExecEnvironment) int {
+	for idx := range execEnv.keys {
+		if bytes.Compare(execEnv.keys[idx], key) == 0 {
 			return idx
 		}
 	}
 	return -1
 }
 
-func (w *worker) runTxn(txn *pb.Transaction) {
-	id, err := ulid.ParseIdFromProto(txn.Id)
-	if err != nil {
-		w.logger.Panicf("Can't parse txn id: %s", err.Error())
+func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
+	switch txn.StoredProcedure {
+	case "__simple_setter__":
+		w.runSetterTxn(txn, execEnv)
+	default:
+		err := fmt.Errorf("can't find stored proc [%s]", txn.StoredProcedure)
+		w.logger.Errorf("%s\n", err.Error())
+		return err
 	}
-	w.logger.Infof("ran txn: %s\n", id.String())
+
+	return nil
+}
+
+func (w *worker) runSetterTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
+	for idx := range txn.StoredProcedureArgs {
+		arg := &pb.SimpleSetterArg{}
+		err := arg.Unmarshal(txn.StoredProcedureArgs[idx])
+		if err != nil {
+			id, _ := ulid.ParseIdFromProto(txn.Id)
+			return fmt.Errorf("Can't unmarshal args for simple setter [%s]", id.String())
+		}
+
+		w.store.Set(arg.Key, arg.Value)
+	}
+	return nil
 }

@@ -33,6 +33,11 @@ option (gogoproto.goproto_enum_prefix_all) = false;
 ////////////////////////////////
 // SECTION FOR TRANSACTIONS
 
+message SimpleSetterArg {
+  bytes Key = 1;
+  bytes Value = 2;
+}
+
 message Id128 {
   option (gogoproto.equal) = true;
   option (gogoproto.compare) = true;
@@ -61,8 +66,6 @@ message Transaction {
 
 message TransactionBatch {
   repeated Transaction transactions = 1;
-  // uint64 Epoch = 2;
-  // uint64 NodeId = 3;
 }
 
 //////////////////////////////////////////

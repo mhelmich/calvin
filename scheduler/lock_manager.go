@@ -68,26 +68,22 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 
 func (lm *lockManager) lock(txn *pb.Transaction) int {
 	numLocksNotAcquired := 0
-	// var keyWithoutLocks [][]byte
 	// lock the read-write set first
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, write, txn.ReadWriteSet)
-	// keyWithoutLocks = append(keyWithoutLocks, k...)
 
 	// lock read set
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
-	// keyWithoutLocks = append(keyWithoutLocks, k...)
 	return numLocksNotAcquired
 }
 
 func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byte) int {
 	numLocksNotAcquired := 0
-	// keysWithoutLock := make([][]byte, 0)
 	for i := 0; i < len(set); i++ {
 		key := set[i]
 		if lm.isKeyLocal(key) {
@@ -115,7 +111,6 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 				// I'm a write so I will certainly not get the lock and have to wait
 				if mode == write {
 					numLocksNotAcquired++
-					// keysWithoutLock = append(keysWithoutLock, key)
 				}
 
 				txnID, _ := ulid.ParseIdFromProto(txn.Id)
@@ -125,7 +120,6 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					// I know I won't be getting the lock
 					if mode == read && lockRequests[j].mode == write {
 						numLocksNotAcquired++
-						// keysWithoutLock = append(keysWithoutLock, key)
 					}
 
 					id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)

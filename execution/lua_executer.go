@@ -15,3 +15,26 @@
  */
 
 package execution
+
+import (
+	"fmt"
+
+	"github.com/mhelmich/calvin/pb"
+	glua "github.com/yuin/gopher-lua"
+	gluar "layeh.com/gopher-luar"
+)
+
+var procs = map[string]string{
+	"lua_": ``,
+}
+
+func runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, store *luaDataStore) error {
+	lua := glua.NewState()
+	defer lua.Close()
+	lua.SetGlobal("store", gluar.New(lua, store))
+	script, ok := procs[txn.StoredProcedure]
+	if !ok {
+		return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
+	}
+	return lua.DoString(script)
+}

@@ -16,19 +16,46 @@
 
 package execution
 
+import (
+	"bytes"
+
+	"github.com/mhelmich/calvin/util"
+	log "github.com/sirupsen/logrus"
+)
+
 type DataStore interface {
 	Get(key []byte) []byte
 	Set(key []byte, value []byte)
 }
 
-type LuaDataStore struct {
-	ds DataStore
+type luaDataStore struct {
+	ds     DataStore
+	keys   [][]byte
+	values [][]byte
+	cip    util.ClusterInfoProvider
 }
 
-func (lds *LuaDataStore) Get(key string) string {
-	return string(lds.ds.Get([]byte(key)))
+func (lds *luaDataStore) Get(key string) string {
+	val, ok := lds.getValueFor([]byte(key))
+	if !ok {
+		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
+	} else if val == nil {
+		return string(lds.ds.Get([]byte(key)))
+	}
+	return string(val)
 }
 
-func (lds *LuaDataStore) Set(key string, value string) {
-	lds.ds.Set([]byte(key), []byte(value))
+func (lds *luaDataStore) Set(key string, value string) {
+	if lds.cip.IsLocal([]byte(key)) {
+		lds.ds.Set([]byte(key), []byte(value))
+	}
+}
+
+func (lds *luaDataStore) getValueFor(key []byte) ([]byte, bool) {
+	for idx := range lds.keys {
+		if bytes.Compare(lds.keys[idx], key) == 0 {
+			return lds.values[idx], true
+		}
+	}
+	return nil, false
 }

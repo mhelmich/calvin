@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -162,16 +163,18 @@ func (w *worker) getValueFor(key []byte, execEnv *txnExecEnvironment) int {
 }
 
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
-	switch txn.StoredProcedure {
-	case "__simple_setter__":
-		w.runSetterTxn(txn, execEnv)
-	default:
-		err := fmt.Errorf("can't find stored proc [%s]", txn.StoredProcedure)
-		w.logger.Errorf("%s\n", err.Error())
-		return err
+	if !strings.HasPrefix(txn.StoredProcedure, "lua_") {
+		return fmt.Errorf("Unknown procedure [%s]", txn.StoredProcedure)
 	}
 
-	return nil
+	lds := &luaDataStore{
+		ds:     w.store,
+		keys:   execEnv.keys,
+		values: execEnv.values,
+		cip:    w.cip,
+	}
+
+	return runLua(txn, execEnv, lds)
 }
 
 func (w *worker) runSetterTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {

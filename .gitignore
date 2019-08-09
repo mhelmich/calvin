@@ -17,3 +17,5 @@
 # test data dirs
 **/test-*/*
 **/raft-*/*
+**/raft.db
+**/data.db

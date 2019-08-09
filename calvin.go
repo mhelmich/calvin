@@ -40,26 +40,41 @@ type config struct {
 	Hostname  string
 	Port      int
 	StorePath string
+	Peers     []uint64
 }
 
 func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	cfg := readConfig(configPath)
 	cc := util.NewConnectionCache(clusterInfoPath)
 	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
-	srvr := grpc.NewServer()
 	logger := log.WithFields(log.Fields{
 		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(cfg.RaftID)),
 		"raftId":    util.Uint64ToString(cfg.RaftID),
 	})
+
+	srvr := grpc.NewServer()
 	// myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
 	myAddress := fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port)
-	// fmt.Printf("my address[%s]\n", myAddress)
+	logger.Infof("My address: [%s]", myAddress)
+	lis, err := net.Listen("tcp", myAddress)
+	if err != nil {
+		logger.Panicf("%s\n", err.Error())
+	}
 
 	txnBatchChan := make(chan *pb.TransactionBatch)
 	peers := []raft.Peer{raft.Peer{
 		ID:      cfg.RaftID,
 		Context: []byte(myAddress),
 	}}
+
+	for idx := range cfg.Peers {
+		addr := cip.GetAddressFor(cfg.Peers[idx])
+		peers = append(peers, raft.Peer{
+			ID:      cfg.Peers[idx],
+			Context: []byte(addr),
+		})
+	}
+
 	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
 	if !strings.HasSuffix(storeDir, "/") {
 		storeDir = storeDir + "/"
@@ -73,10 +88,6 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	dataStore := newBoltDataStore(storeDir, logger)
 	engine := execution.NewEngine(readyTxns, doneTxnChan, dataStore, srvr, cc, cip, logger)
 
-	lis, err := net.Listen("tcp", myAddress)
-	if err != nil {
-		logger.Panicf("%s\n", err.Error())
-	}
 	go srvr.Serve(lis)
 
 	return &Calvin{

@@ -23,6 +23,20 @@ func (_m *ClusterInfoProvider) AmIWriter(writerNodes []uint64) bool {
 	return r0
 }
 
+// GetAddressFor provides a mock function with given fields: nodeID
+func (_m *ClusterInfoProvider) GetAddressFor(nodeID uint64) string {
+	ret := _m.Called(nodeID)
+
+	var r0 string
+	if rf, ok := ret.Get(0).(func(uint64) string); ok {
+		r0 = rf(nodeID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+
+	return r0
+}
+
 // IsLocal provides a mock function with given fields: key
 func (_m *ClusterInfoProvider) IsLocal(key []byte) bool {
 	ret := _m.Called(key)

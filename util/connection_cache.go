@@ -77,7 +77,6 @@ func (cc *connCache) getConn(nodeID uint64) (*grpc.ClientConn, error) {
 	c, ok := cc.nodeIDToConn.Load(nodeID)
 
 	if !ok {
-		fmt.Printf("Creating new conn for [%s]\n", addr)
 		conn, err := grpc.Dial(addr, grpc.WithInsecure())
 		if err != nil {
 			return nil, err

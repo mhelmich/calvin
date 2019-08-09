@@ -17,6 +17,7 @@
 package util
 
 import (
+	"fmt"
 	"hash/fnv"
 	"os"
 
@@ -27,6 +28,7 @@ import (
 type ClusterInfoProvider interface {
 	IsLocal(key []byte) bool
 	AmIWriter(writerNodes []uint64) bool
+	GetAddressFor(nodeID uint64) string
 }
 
 func NewClusterInfoProvider(ownNodeID uint64, pathToClusterInfo string) ClusterInfoProvider {
@@ -61,6 +63,15 @@ func (c *cip) AmIWriter(writerNodes []uint64) bool {
 		}
 	}
 	return false
+}
+
+func (c *cip) GetAddressFor(nodeID uint64) string {
+	node, ok := c.ci.Nodes[nodeID]
+	if !ok {
+		return ""
+	}
+
+	return fmt.Sprintf("%s:%d", node.Hostname, node.Port)
 }
 
 type ClusterInfo struct {

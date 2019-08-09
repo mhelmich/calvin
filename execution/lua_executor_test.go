@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/mhelmich/calvin/mocks"
+	"github.com/mhelmich/calvin/pb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	glua "github.com/yuin/gopher-lua"
@@ -158,6 +159,37 @@ func TestLuaExecutorFancy(t *testing.T) {
 	assert.Equal(t, "narf_value", v)
 	v = store.Get("moep")
 	assert.Equal(t, "moep_value", v)
+}
+
+func TestLuaExecutorScriptInvocation(t *testing.T) {
+	txn := &pb.Transaction{
+		StoredProcedure:     "__simple_setter__",
+		StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
+	}
+
+	execEnv := &txnExecEnvironment{
+		keys:   [][]byte{[]byte("narf"), []byte("moep")},
+		values: [][]byte{nil, nil},
+	}
+
+	mockCIP := new(mocks.ClusterInfoProvider)
+	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+
+	lds := &luaDataStore{
+		ds: &mapDataStore{
+			m: make(map[string]string),
+		},
+		keys:   execEnv.keys,
+		values: execEnv.values,
+		cip:    mockCIP,
+	}
+
+	runLua(txn, execEnv, lds)
+
+	v := lds.Get("narf")
+	assert.Equal(t, "narf_arg", v)
+	v = lds.Get("moep")
+	assert.Equal(t, "moep_arg", v)
 }
 
 type mapDataStore struct {

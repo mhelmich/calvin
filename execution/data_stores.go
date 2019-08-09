@@ -46,9 +46,16 @@ func (lds *luaDataStore) Get(key string) string {
 }
 
 func (lds *luaDataStore) Set(key string, value string) {
-	if lds.cip.IsLocal([]byte(key)) {
-		lds.ds.Set([]byte(key), []byte(value))
+	if !lds.cip.IsLocal([]byte(key)) {
+		log.Panicf("you tried to access key [%s] but the key wasn't local", key)
 	}
+
+	_, ok := lds.getValueFor([]byte(key))
+	if !ok {
+		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
+	}
+
+	lds.ds.Set([]byte(key), []byte(value))
 }
 
 func (lds *luaDataStore) getValueFor(key []byte) ([]byte, bool) {

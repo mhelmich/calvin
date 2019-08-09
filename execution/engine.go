@@ -17,10 +17,7 @@
 package execution
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -153,40 +150,12 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	w.doneTxnChan <- txn
 }
 
-func (w *worker) getValueFor(key []byte, execEnv *txnExecEnvironment) int {
-	for idx := range execEnv.keys {
-		if bytes.Compare(execEnv.keys[idx], key) == 0 {
-			return idx
-		}
-	}
-	return -1
-}
-
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
-	if !strings.HasPrefix(txn.StoredProcedure, "lua_") {
-		return fmt.Errorf("Unknown procedure [%s]", txn.StoredProcedure)
-	}
-
 	lds := &luaDataStore{
 		ds:     w.store,
 		keys:   execEnv.keys,
 		values: execEnv.values,
 		cip:    w.cip,
 	}
-
 	return runLua(txn, execEnv, lds)
-}
-
-func (w *worker) runSetterTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
-	for idx := range txn.StoredProcedureArgs {
-		arg := &pb.SimpleSetterArg{}
-		err := arg.Unmarshal(txn.StoredProcedureArgs[idx])
-		if err != nil {
-			id, _ := ulid.ParseIdFromProto(txn.Id)
-			return fmt.Errorf("Can't unmarshal args for simple setter [%s]", id.String())
-		}
-
-		w.store.Set(arg.Key, arg.Value)
-	}
-	return nil
 }

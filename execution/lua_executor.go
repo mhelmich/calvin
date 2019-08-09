@@ -24,17 +24,41 @@ import (
 	gluar "layeh.com/gopher-luar"
 )
 
+const simpleSetter = `
+	for i = 1, ARGC
+	do
+		store:Set(KEYV[i], ARGV[i])
+	end
+`
+
 var procs = map[string]string{
-	"lua_": ``,
+	"__simple_setter__": simpleSetter,
 }
 
-func runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, store *luaDataStore) error {
-	lua := glua.NewState()
-	defer lua.Close()
-	lua.SetGlobal("store", gluar.New(lua, store))
+func runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *luaDataStore) error {
 	script, ok := procs[txn.StoredProcedure]
 	if !ok {
 		return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
 	}
+
+	args := convertByteArrayToString(txn.StoredProcedureArgs)
+	keys := convertByteArrayToString(execEnv.keys)
+
+	lua := glua.NewState()
+	defer lua.Close()
+	lua.SetGlobal("store", gluar.New(lua, lds))
+	lua.SetGlobal("KEYC", gluar.New(lua, len(keys)))
+	lua.SetGlobal("KEYV", gluar.New(lua, keys))
+	lua.SetGlobal("ARGC", gluar.New(lua, len(args)))
+	lua.SetGlobal("ARGV", gluar.New(lua, args))
+
 	return lua.DoString(script)
+}
+
+func convertByteArrayToString(args [][]byte) []string {
+	strs := make([]string, len(args))
+	for i := 0; i < len(args); i++ {
+		strs[i] = string(args[i])
+	}
+	return strs
 }

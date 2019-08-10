@@ -18,13 +18,16 @@ package execution
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
+	glua "github.com/yuin/gopher-lua"
 	"google.golang.org/grpc"
+	gluar "layeh.com/gopher-luar"
 )
 
 func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
@@ -33,6 +36,8 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	rrs := newRemoteReadServer(readyToExecChan, logger)
 	pb.RegisterRemoteReadServer(srvr, rrs)
 	txnsToExecute := &sync.Map{}
+	storedProcs := &sync.Map{}
+	initStoredProcedures(storedProcs)
 
 	for i := 0; i < 2; i++ {
 		w := worker{
@@ -43,15 +48,24 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 			connCache:        connCache,
 			cip:              cip,
 			txnsToExecute:    txnsToExecute,
+			storedProcs:      storedProcs,
 			logger:           logger,
 		}
 		go w.runWorker()
 	}
 
-	return &Engine{}
+	return &Engine{
+		storedProcs: storedProcs,
+	}
 }
 
-type Engine struct{}
+func initStoredProcedures(m *sync.Map) {
+	m.Store(simpleSetterProcName, simpleSetterProc)
+}
+
+type Engine struct {
+	storedProcs *sync.Map
+}
 
 type worker struct {
 	scheduledTxnChan <-chan *pb.Transaction
@@ -61,6 +75,7 @@ type worker struct {
 	connCache        util.ConnectionCache
 	cip              util.ClusterInfoProvider
 	txnsToExecute    *sync.Map
+	storedProcs      *sync.Map
 	logger           *log.Entry
 }
 
@@ -130,10 +145,8 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 			Keys:          keys,
 			Values:        values,
 		})
-		if err != nil {
-			w.logger.Panicf("%s\n", err.Error())
-		} else if resp.Error != "" {
-			w.logger.Panicf("%s\n", resp.Error)
+		if err != nil || resp.Error != "" {
+			w.logger.Errorf("Node [%d] wasn't reachable: %s\n", txn.WriterNodes[idx], err.Error())
 		}
 	}
 }
@@ -157,5 +170,34 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error 
 		values: execEnv.values,
 		cip:    w.cip,
 	}
-	return runLua(txn, execEnv, lds)
+	return w.runLua(txn, execEnv, lds)
+}
+
+func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *luaDataStore) error {
+	v, ok := w.storedProcs.Load(txn.StoredProcedure)
+	if !ok {
+		return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
+	}
+
+	script := v.(string)
+	args := w.convertByteArrayToStringArray(txn.StoredProcedureArgs)
+	keys := w.convertByteArrayToStringArray(execEnv.keys)
+
+	lua := glua.NewState()
+	defer lua.Close()
+	lua.SetGlobal("store", gluar.New(lua, lds))
+	lua.SetGlobal("KEYC", gluar.New(lua, len(keys)))
+	lua.SetGlobal("KEYV", gluar.New(lua, keys))
+	lua.SetGlobal("ARGC", gluar.New(lua, len(args)))
+	lua.SetGlobal("ARGV", gluar.New(lua, args))
+
+	return lua.DoString(script)
+}
+
+func (w *worker) convertByteArrayToStringArray(args [][]byte) []string {
+	strs := make([]string, len(args))
+	for i := 0; i < len(args); i++ {
+		strs[i] = string(args[i])
+	}
+	return strs
 }

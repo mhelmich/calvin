@@ -17,6 +17,7 @@
 package execution
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/mhelmich/calvin/mocks"
@@ -184,7 +185,13 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 		cip:    mockCIP,
 	}
 
-	runLua(txn, execEnv, lds)
+	procs := &sync.Map{}
+	procs.Store(simpleSetterProcName, simpleSetterProc)
+
+	w := &worker{
+		storedProcs: procs,
+	}
+	w.runLua(txn, execEnv, lds)
 
 	v := lds.Get("narf")
 	assert.Equal(t, "narf_arg", v)

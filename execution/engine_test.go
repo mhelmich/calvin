@@ -129,6 +129,7 @@ func TestWorkerBasic(t *testing.T) {
 		connCache:        mockCC,
 		cip:              mockCIP,
 		txnsToExecute:    txnsToExecute,
+		storedProcs:      &sync.Map{},
 		logger:           logger,
 	}
 	go w.runWorker()
@@ -193,6 +194,9 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	txnsToExecute := &sync.Map{}
 	logger := log.WithFields(log.Fields{})
 
+	procs := &sync.Map{}
+	procs.Store(simpleSetterProcName, simpleSetterProc)
+
 	w := worker{
 		scheduledTxnChan: scheduledTxnChan,
 		readyToExecChan:  readyToExecChan,
@@ -201,6 +205,7 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		connCache:        mockCC,
 		cip:              mockCIP,
 		txnsToExecute:    txnsToExecute,
+		storedProcs:      procs,
 		logger:           logger,
 	}
 	go w.runWorker()

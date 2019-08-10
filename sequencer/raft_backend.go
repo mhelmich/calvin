@@ -65,13 +65,11 @@ func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeC
 		connCache:             connCache,
 		store:                 bs,
 		confState:             &raftpb.ConfState{},
-		startChan:             make(chan interface{}),
 		logger:                logger,
 	}
 
 	go rb.runRaftStateMachine()
 	go rb.serveProposalChannels()
-	<-rb.startChan
 	return rb
 }
 
@@ -141,10 +139,6 @@ func (rb *raftBackend) runRaftStateMachine() {
 }
 
 func (rb *raftBackend) processReady(rd raft.Ready) {
-	if rb.startChan != nil && rb.raftNode.Status().Lead > uint64(0) {
-		close(rb.startChan)
-		rb.startChan = nil
-	}
 	rb.store.saveEntriesAndState(rd.Entries, rd.HardState)
 	rb.broadcastMessages(rd.Messages)
 	rb.publishEntries(rb.entriesToApply(rd.CommittedEntries))
@@ -163,10 +157,9 @@ func (rb *raftBackend) broadcastMessages(msgs []raftpb.Message) {
 			Message: &msg,
 		}
 		resp, err := client.Step(context.Background(), req)
-		if err != nil {
-			rb.logger.Panicf("%s\n", err.Error())
-		} else if resp.Error != "" {
-			rb.logger.Panicf("%s\n", resp.Error)
+		if err != nil || resp.Error != "" {
+			rb.raftNode.ReportUnreachable(msg.To)
+			rb.logger.Errorf("Node [%d] wasn't reachable: %s\n", msg.To, err.Error())
 		}
 	}
 }

@@ -21,7 +21,6 @@ import (
 	"hash/fnv"
 
 	"github.com/mhelmich/calvin/pb"
-	"github.com/mhelmich/calvin/ulid"
 )
 
 type lockMode int
@@ -113,7 +112,6 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					numLocksNotAcquired++
 				}
 
-				txnID, _ := ulid.ParseIdFromProto(txn.Id)
 				for ; j < len(lockRequests); j++ {
 
 					// if I'm a read and I find a write ahead of me,
@@ -122,8 +120,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 						numLocksNotAcquired++
 					}
 
-					id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
-					if txnID.CompareTo(id) == 0 {
+					if txn.Id.Equal(lockRequests[j].txn.Id) {
 						// it seems I requested the lock already
 						break
 					}
@@ -175,13 +172,11 @@ func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRe
 		var deletedLockRequest *lockRequest
 
 		if ok {
-			txnID, _ := ulid.ParseIdFromProto(txnIDProto)
 			for ; j < len(lockRequests); j++ {
-				id, _ := ulid.ParseIdFromProto(lockRequests[j].txn.Id)
 				if lockRequests[j].mode == write {
 					precededByWrite = true
 				}
-				if txnID.CompareTo(id) == 0 {
+				if txnIDProto.Equal(lockRequests[j].txn.Id) {
 					break
 				}
 			}

@@ -76,13 +76,15 @@ func (s *Sequencer) serveTxnBatches() {
 			batch.Transactions = append(batch.Transactions, txn)
 
 		case <-batchTicker.C:
-			bites, err := batch.Marshal()
-			if err != nil {
-				s.logger.Panicf("%s", err)
-			}
+			if len(batch.Transactions) > 0 {
+				bites, err := batch.Marshal()
+				if err != nil {
+					s.logger.Panicf("%s", err)
+				}
 
-			s.proposeChan <- bites
-			batch = &pb.TransactionBatch{}
+				s.proposeChan <- bites
+				batch = &pb.TransactionBatch{}
+			}
 
 		}
 	}

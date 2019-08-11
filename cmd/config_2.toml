@@ -18,4 +18,4 @@ raft_id = 2
 hostname = "localhost"
 port = 5434
 store_path = "./calvin-"
-peers = [ 1, 3 ]
+peers = [ 1 ]

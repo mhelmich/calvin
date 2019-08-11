@@ -183,6 +183,10 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *l
 	args := w.convertByteArrayToStringArray(txn.StoredProcedureArgs)
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
 
+	// OPTIMIZE:
+	// - create lua state only once (and maybe replace in intervals in the executor thread [use a ticker to do that])
+	// - DoString is pretty expensive as it calls LoadString every time.
+	//   It might make sense to load the string only once, cache it, and use PCall instead.
 	lua := glua.NewState()
 	defer lua.Close()
 	lua.SetGlobal("store", gluar.New(lua, lds))

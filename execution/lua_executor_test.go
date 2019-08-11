@@ -17,6 +17,8 @@
 package execution
 
 import (
+	"os"
+	"runtime/pprof"
 	"sync"
 	"testing"
 
@@ -164,7 +166,7 @@ func TestLuaExecutorFancy(t *testing.T) {
 
 func TestLuaExecutorScriptInvocation(t *testing.T) {
 	txn := &pb.Transaction{
-		StoredProcedure:     "__simple_setter__",
+		StoredProcedure:     simpleSetterProcName,
 		StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
 	}
 
@@ -197,6 +199,55 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	assert.Equal(t, "narf_arg", v)
 	v = lds.Get("moep")
 	assert.Equal(t, "moep_arg", v)
+}
+
+func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
+	txn := &pb.Transaction{
+		StoredProcedure:     simpleSetterProcName,
+		StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
+	}
+
+	execEnv := &txnExecEnvironment{
+		keys:   [][]byte{[]byte("narf"), []byte("moep")},
+		values: [][]byte{nil, nil},
+	}
+
+	mockCIP := new(mocks.ClusterInfoProvider)
+	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+
+	lds := &luaDataStore{
+		ds: &mapDataStore{
+			m: make(map[string]string),
+		},
+		keys:   execEnv.keys,
+		values: execEnv.values,
+		cip:    mockCIP,
+	}
+
+	procs := &sync.Map{}
+	procs.Store(simpleSetterProcName, simpleSetterProc)
+
+	w := &worker{
+		storedProcs: procs,
+	}
+
+	f1, err := os.Create("./narf.pprof")
+	assert.Nil(b, err)
+	f2, err := os.Create("./narf.mprof")
+	assert.Nil(b, err)
+	pprof.StartCPUProfile(f1)
+	defer pprof.StopCPUProfile()
+	pprof.WriteHeapProfile(f2)
+	defer f2.Close()
+
+	for i := 0; i < b.N; i++ {
+		w.runLua(txn, execEnv, lds)
+	}
+
+	v := lds.Get("narf")
+	assert.Equal(b, "narf_arg", v)
+	v = lds.Get("moep")
+	assert.Equal(b, "moep_arg", v)
 }
 
 type mapDataStore struct {

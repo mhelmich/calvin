@@ -30,7 +30,7 @@ import (
 func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeChan <-chan raftpb.ConfChange, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, logger *log.Entry) *raftBackend {
 	bs, err := openBoltStorage(storeDir, logger)
 	if err != nil {
-		logger.Panicf("%s\n", err.Error())
+		logger.Panicf("%s", err.Error())
 	}
 
 	c := &raft.Config{

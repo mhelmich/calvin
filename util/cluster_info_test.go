@@ -24,9 +24,9 @@ import (
 
 func TestIsLocal(t *testing.T) {
 	key1 := "narf"
-	cip1 := NewClusterInfoProvider(uint64(1), "../cluster_info.toml")
+	cip1 := NewClusterInfoProvider(uint64(1), "../cmd/cluster_info.toml")
 	log.Infof("'%s' is local on 1: %t", key1, cip1.IsLocal([]byte(key1)))
 	key2 := "mrmoep"
-	cip2 := NewClusterInfoProvider(uint64(2), "../cluster_info.toml")
+	cip2 := NewClusterInfoProvider(uint64(2), "../cmd/cluster_info.toml")
 	log.Infof("'%s' is local on 2: %t", key2, cip2.IsLocal([]byte(key2)))
 }

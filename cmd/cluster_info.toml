@@ -14,8 +14,8 @@
 #  limitations under the License.
 #
 
-number_primaries = 3
-number_partitions = 9
+number_primaries = 2
+number_partitions = 6
 
 [nodes]
   [nodes.1]

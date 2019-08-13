@@ -37,19 +37,22 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	pb.RegisterRemoteReadServer(srvr, rrs)
 	txnsToExecute := &sync.Map{}
 	storedProcs := &sync.Map{}
+	compiledStoredProcs := &sync.Map{}
 	initStoredProcedures(storedProcs)
 
 	for i := 0; i < 2; i++ {
 		w := worker{
-			scheduledTxnChan: scheduledTxnChan,
-			readyToExecChan:  readyToExecChan,
-			doneTxnChan:      doneTxnChan,
-			store:            store,
-			connCache:        connCache,
-			cip:              cip,
-			txnsToExecute:    txnsToExecute,
-			storedProcs:      storedProcs,
-			logger:           logger,
+			scheduledTxnChan:    scheduledTxnChan,
+			readyToExecChan:     readyToExecChan,
+			doneTxnChan:         doneTxnChan,
+			store:               store,
+			connCache:           connCache,
+			cip:                 cip,
+			txnsToExecute:       txnsToExecute,
+			storedProcs:         storedProcs,
+			luaState:            glua.NewState(),
+			compiledStoredProcs: compiledStoredProcs,
+			logger:              logger,
 		}
 		go w.runWorker()
 	}
@@ -68,15 +71,17 @@ type Engine struct {
 }
 
 type worker struct {
-	scheduledTxnChan <-chan *pb.Transaction
-	readyToExecChan  <-chan *txnExecEnvironment
-	doneTxnChan      chan<- *pb.Transaction
-	store            DataStore
-	connCache        util.ConnectionCache
-	cip              util.ClusterInfoProvider
-	txnsToExecute    *sync.Map
-	storedProcs      *sync.Map
-	logger           *log.Entry
+	scheduledTxnChan    <-chan *pb.Transaction
+	readyToExecChan     <-chan *txnExecEnvironment
+	doneTxnChan         chan<- *pb.Transaction
+	store               DataStore
+	connCache           util.ConnectionCache
+	cip                 util.ClusterInfoProvider
+	txnsToExecute       *sync.Map
+	storedProcs         *sync.Map
+	compiledStoredProcs *sync.Map
+	luaState            *glua.LState
+	logger              *log.Entry
 }
 
 func (w *worker) runWorker() {
@@ -86,6 +91,7 @@ func (w *worker) runWorker() {
 		case txn := <-w.scheduledTxnChan:
 			if txn == nil {
 				w.logger.Warningf("Execution worker shutting down")
+				w.luaState.Close()
 				return
 			}
 			w.processScheduledTxn(txn, w.store)
@@ -174,28 +180,34 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error 
 }
 
 func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *luaDataStore) error {
-	v, ok := w.storedProcs.Load(txn.StoredProcedure)
+	fction, ok := w.compiledStoredProcs.Load(txn.StoredProcedure)
 	if !ok {
-		return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
+		v, ok := w.storedProcs.Load(txn.StoredProcedure)
+		if !ok {
+			return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
+		}
+		script := v.(string)
+
+		fn, err := w.luaState.LoadString(script)
+		if err != nil {
+			w.logger.Panicf("%s\n", err.Error())
+		}
+
+		fction, _ = w.compiledStoredProcs.LoadOrStore(txn.StoredProcedure, fn)
 	}
 
-	script := v.(string)
 	args := w.convertByteArrayToStringArray(txn.StoredProcedureArgs)
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
 
-	// OPTIMIZE:
-	// - create lua state only once (and maybe replace in intervals in the executor thread [use a ticker to do that])
-	// - DoString is pretty expensive as it calls LoadString every time.
-	//   It might make sense to load the string only once, cache it, and use PCall instead.
-	lua := glua.NewState()
-	defer lua.Close()
-	lua.SetGlobal("store", gluar.New(lua, lds))
-	lua.SetGlobal("KEYC", gluar.New(lua, len(keys)))
-	lua.SetGlobal("KEYV", gluar.New(lua, keys))
-	lua.SetGlobal("ARGC", gluar.New(lua, len(args)))
-	lua.SetGlobal("ARGV", gluar.New(lua, args))
+	w.luaState.SetGlobal("store", gluar.New(w.luaState, lds))
+	w.luaState.SetGlobal("KEYC", gluar.New(w.luaState, len(keys)))
+	w.luaState.SetGlobal("KEYV", gluar.New(w.luaState, keys))
+	w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, len(args)))
+	w.luaState.SetGlobal("ARGV", gluar.New(w.luaState, args))
 
-	return lua.DoString(script)
+	fn := fction.(*glua.LFunction)
+	w.luaState.Push(fn)
+	return w.luaState.PCall(0, glua.MultRet, nil)
 }
 
 func (w *worker) convertByteArrayToStringArray(args [][]byte) []string {

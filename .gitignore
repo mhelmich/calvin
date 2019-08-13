@@ -19,3 +19,10 @@
 **/raft-*/*
 **/raft.db
 **/data.db
+
+**/.DS_Store
+**/*.svg
+**/config-*.toml
+**/cluster_info-*.toml
+*/*.pprof
+*/*.mprof

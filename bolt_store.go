@@ -17,6 +17,8 @@
 package calvin
 
 import (
+	"time"
+
 	bolt "github.com/coreos/bbolt"
 	log "github.com/sirupsen/logrus"
 )
@@ -27,7 +29,7 @@ const (
 )
 
 func newBoltDataStore(dir string, logger *log.Entry) *boltDataStore {
-	db, err := bolt.Open(dir+dbName, 0600, nil)
+	db, err := bolt.Open(dir+dbName, 0600, &bolt.Options{Timeout: time.Second, NoFreelistSync: true})
 	if err != nil {
 		logger.Panicf("%s\n", err.Error())
 	}

@@ -75,7 +75,7 @@ func openBoltStorage(dir string, parentLogger *log.Entry) (*boltStorage, error) 
 		}
 	}
 
-	db, err := bolt.Open(dir+databaseName, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(dir+databaseName, 0600, &bolt.Options{Timeout: 1 * time.Second, NoFreelistSync: true})
 	if err != nil {
 		return nil, err
 	}

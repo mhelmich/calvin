@@ -70,6 +70,9 @@ func (s *Scheduler) runLockManager() {
 				return
 			}
 
+			// readyId, _ := ulid.ParseIdFromProto(txn.Id)
+			// fmt.Printf("txn [%s] became done\n", readyId.String())
+
 			newOwners := s.lockMgr.release(txn)
 			for idx := range newOwners {
 				// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)

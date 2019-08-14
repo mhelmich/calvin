@@ -87,8 +87,6 @@ type Node struct {
 	Partitions []int
 }
 
-var staticClusterInfo ClusterInfo
-
 func readClusterInfo(path string) ClusterInfo {
 	f, err := os.Open(path)
 	if err != nil {
@@ -96,9 +94,10 @@ func readClusterInfo(path string) ClusterInfo {
 	}
 	defer f.Close()
 
-	if err := toml.NewDecoder(f).Decode(&staticClusterInfo); err != nil {
+	var ci ClusterInfo
+	if err := toml.NewDecoder(f).Decode(&ci); err != nil {
 		log.Panicf("%s\n", err.Error())
 	}
 
-	return staticClusterInfo
+	return ci
 }

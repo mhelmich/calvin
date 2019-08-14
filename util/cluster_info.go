@@ -46,8 +46,8 @@ type cip struct {
 func (c *cip) IsLocal(key []byte) bool {
 	hasher := fnv.New64()
 	hasher.Write(key)
-	partition := int(hasher.Sum64() % uint64(staticClusterInfo.NumberPartitions))
-	node := staticClusterInfo.Nodes[c.ownNodeID]
+	partition := int(hasher.Sum64() % uint64(c.ci.NumberPartitions))
+	node := c.ci.Nodes[c.ownNodeID]
 	for idx := range node.Partitions {
 		if node.Partitions[idx] == partition {
 			return true

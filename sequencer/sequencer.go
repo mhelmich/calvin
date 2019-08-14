@@ -17,7 +17,7 @@
 package sequencer
 
 import (
-	"context"
+	"io"
 	"time"
 
 	"github.com/mhelmich/calvin/pb"
@@ -98,7 +98,24 @@ func (s *Sequencer) Stop() {
 	close(s.writerChan)
 }
 
-func (s *Sequencer) Step(ctx context.Context, req *pb.StepRequest) (*pb.StepResponse, error) {
-	err := s.rb.step(ctx, *req.Message)
-	return &pb.StepResponse{}, err
+func (s *Sequencer) StepStream(stream pb.RaftTransport_StepStreamServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		resp := &pb.StepResponse{}
+		err = s.rb.step(stream.Context(), *req.Message)
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+		err = stream.Send(resp)
+		if err != nil {
+			s.logger.Errorf("%s", err.Error())
+		}
+	}
 }

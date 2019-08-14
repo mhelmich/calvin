@@ -72,10 +72,6 @@ message TransactionBatch {
 ////////////////////////////////
 // SECTION FOR SCHEDULER SERVICE
 
-message SchedulerResponse {
-  string Error = 1;
-}
-
 message LowIsolationReadRequest {
   repeated bytes Keys = 1;
 }
@@ -120,11 +116,11 @@ message RaftPeer {
 }
 
 service RaftTransport {
-  rpc Step(StepRequest) returns (StepResponse) {}
+  rpc StepStream(stream StepRequest) returns (stream StepResponse) {}
 }
 
 message StepRequest {
-  int64 RaftNodeId = 1;
+  uint64 RaftNodeId = 1;
   raftpb.Message Message = 2;
 }
 

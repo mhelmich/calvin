@@ -146,20 +146,64 @@ func (rb *raftBackend) processReady(rd raft.Ready) {
 }
 
 func (rb *raftBackend) broadcastMessages(msgs []raftpb.Message) {
+	peers := make(map[uint64]bool)
 	for idx := range msgs {
-		msg := msgs[idx]
-		client, err := rb.connCache.GetRaftTransportClient(msg.To)
-		if err != nil {
-			rb.logger.Panicf("%s\n", err.Error())
+		_, ok := peers[msgs[idx].To]
+		if !ok {
+			peers[msgs[idx].To] = true
+			go rb.innerBroadcastMessages(msgs[idx].To, idx, msgs)
 		}
+	}
+}
 
-		req := &pb.StepRequest{
-			Message: &msg,
+func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, msgs []raftpb.Message) {
+	client, err := rb.connCache.GetRaftTransportClient(recipientID)
+	if err != nil {
+		rb.raftNode.ReportUnreachable(recipientID)
+		rb.logger.Errorf("%s", err.Error())
+		return
+	}
+
+	stream, err := client.StepStream(context.Background())
+	if err != nil {
+		rb.raftNode.ReportUnreachable(recipientID)
+		rb.logger.Errorf("%s", err.Error())
+		return
+	}
+
+	numMsgsSent := 0
+
+	for idx := startIdx; idx < len(msgs); idx++ {
+		if msgs[idx].To == recipientID {
+			msg := msgs[idx]
+			req := &pb.StepRequest{
+				Message: &msg,
+			}
+
+			err := stream.Send(req)
+			if err != nil {
+				rb.raftNode.ReportUnreachable(recipientID)
+				rb.logger.Errorf("%s", err.Error())
+			}
+			numMsgsSent++
 		}
-		resp, err := client.Step(context.Background(), req)
-		if err != nil || resp.Error != "" {
-			rb.raftNode.ReportUnreachable(msg.To)
-			rb.logger.Errorf("Node [%d] wasn't reachable: %s\n", msg.To, err.Error())
+	}
+
+	err = stream.CloseSend()
+	if err != nil {
+		rb.raftNode.ReportUnreachable(recipientID)
+		rb.logger.Errorf("%s", err.Error())
+		return
+	}
+
+	for idx := 0; idx < numMsgsSent; idx++ {
+		resp, err := stream.Recv()
+		if err != nil {
+			rb.raftNode.ReportUnreachable(recipientID)
+			rb.logger.Errorf("%s", err.Error())
+		} else if resp.Error != "" {
+			rb.raftNode.ReportUnreachable(recipientID)
+			rb.logger.Errorf("%s", resp.Error)
 		}
 	}
 }

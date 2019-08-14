@@ -26,6 +26,7 @@ import (
 )
 
 type ClusterInfoProvider interface {
+	FindOwnerFor(key []byte) uint64
 	IsLocal(key []byte) bool
 	AmIWriter(writerNodes []uint64) bool
 	GetAddressFor(nodeID uint64) string
@@ -43,10 +44,27 @@ type cip struct {
 	ci        clusterInfo
 }
 
-func (c *cip) IsLocal(key []byte) bool {
+func (c *cip) hashKeyToPartition(key []byte) int {
 	hasher := fnv.New64()
 	hasher.Write(key)
-	partition := int(hasher.Sum64() % uint64(c.ci.NumberPartitions))
+	return int(hasher.Sum64() % uint64(c.ci.NumberPartitions))
+}
+
+func (c *cip) FindOwnerFor(key []byte) uint64 {
+	partition := c.hashKeyToPartition(key)
+	for nodeID, node := range c.ci.Nodes {
+		for idx := range node.Partitions {
+			if node.Partitions[idx] == partition {
+				return nodeID
+			}
+		}
+	}
+
+	return uint64(0)
+}
+
+func (c *cip) IsLocal(key []byte) bool {
+	partition := c.hashKeyToPartition(key)
 	node := c.ci.Nodes[c.ownNodeID]
 	for idx := range node.Partitions {
 		if node.Partitions[idx] == partition {

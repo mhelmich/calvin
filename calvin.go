@@ -80,7 +80,7 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	if !strings.HasSuffix(storeDir, "/") {
 		storeDir = storeDir + "/"
 	}
-	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, srvr, logger)
+	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, logger)
 
 	readyTxns := make(chan *pb.Transaction)
 	doneTxnChan := make(chan *pb.Transaction)

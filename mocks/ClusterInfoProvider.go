@@ -23,6 +23,20 @@ func (_m *ClusterInfoProvider) AmIWriter(writerNodes []uint64) bool {
 	return r0
 }
 
+// FindOwnerFor provides a mock function with given fields: key
+func (_m *ClusterInfoProvider) FindOwnerFor(key []byte) uint64 {
+	ret := _m.Called(key)
+
+	var r0 uint64
+	if rf, ok := ret.Get(0).(func([]byte) uint64); ok {
+		r0 = rf(key)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	return r0
+}
+
 // GetAddressFor provides a mock function with given fields: nodeID
 func (_m *ClusterInfoProvider) GetAddressFor(nodeID uint64) string {
 	ret := _m.Called(nodeID)

@@ -32,7 +32,7 @@ const (
 	sequencerBatchFrequencyMs = 100
 )
 
-func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, srvr *grpc.Server, logger *log.Entry) *Sequencer {
+func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, cip util.ClusterInfoProvider, srvr *grpc.Server, logger *log.Entry) *Sequencer {
 	proposeChan := make(chan []byte)
 	proposeConfChangeChan := make(chan raftpb.ConfChange)
 	writerChan := make(chan *pb.Transaction)
@@ -40,6 +40,7 @@ func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers
 		proposeChan:           proposeChan,
 		proposeConfChangeChan: proposeConfChangeChan,
 		writerChan:            writerChan,
+		cip:                   cip,
 		rb:                    newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, connCache, logger),
 		logger:                logger,
 	}
@@ -54,6 +55,7 @@ type Sequencer struct {
 	proposeChan           chan<- []byte
 	proposeConfChangeChan chan<- raftpb.ConfChange
 	writerChan            chan *pb.Transaction
+	cip                   util.ClusterInfoProvider
 	logger                *log.Entry
 }
 
@@ -73,6 +75,7 @@ func (s *Sequencer) serveTxnBatches() {
 				return
 			}
 
+			s.findParticipants(txn)
 			batch.Transactions = append(batch.Transactions, txn)
 
 		case <-batchTicker.C:
@@ -88,6 +91,40 @@ func (s *Sequencer) serveTxnBatches() {
 
 		}
 	}
+}
+
+func (s *Sequencer) findParticipants(txn *pb.Transaction) {
+	readerMap := make(map[uint64]bool)
+	writerMap := make(map[uint64]bool)
+
+	for idx := range txn.ReadWriteSet {
+		ownerID := s.cip.FindOwnerFor(txn.ReadWriteSet[idx])
+		readerMap[ownerID] = true
+		writerMap[ownerID] = true
+	}
+
+	for idx := range txn.ReadSet {
+		ownerID := s.cip.FindOwnerFor(txn.ReadSet[idx])
+		readerMap[ownerID] = true
+	}
+
+	writers := make([]uint64, len(writerMap))
+	readers := make([]uint64, len(readerMap))
+
+	i := 0
+	for key := range writerMap {
+		writers[i] = key
+		i++
+	}
+
+	i = 0
+	for key := range readerMap {
+		readers[i] = key
+		i++
+	}
+
+	txn.WriterNodes = writers
+	txn.ReaderNodes = readers
 }
 
 func (s *Sequencer) SubmitTransaction(txn *pb.Transaction) {

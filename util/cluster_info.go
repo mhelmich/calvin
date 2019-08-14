@@ -40,7 +40,7 @@ func NewClusterInfoProvider(ownNodeID uint64, pathToClusterInfo string) ClusterI
 
 type cip struct {
 	ownNodeID uint64
-	ci        ClusterInfo
+	ci        clusterInfo
 }
 
 func (c *cip) IsLocal(key []byte) bool {
@@ -74,27 +74,27 @@ func (c *cip) GetAddressFor(nodeID uint64) string {
 	return fmt.Sprintf("%s:%d", node.Hostname, node.Port)
 }
 
-type ClusterInfo struct {
+type clusterInfo struct {
 	NumberPrimaries  int
 	NumberPartitions int
-	Nodes            map[uint64]Node
+	Nodes            map[uint64]node
 }
 
-type Node struct {
+type node struct {
 	ID         uint64
 	Hostname   string
 	Port       int
 	Partitions []int
 }
 
-func readClusterInfo(path string) ClusterInfo {
+func readClusterInfo(path string) clusterInfo {
 	f, err := os.Open(path)
 	if err != nil {
 		log.Panicf("%s\n", err.Error())
 	}
 	defer f.Close()
 
-	var ci ClusterInfo
+	var ci clusterInfo
 	if err := toml.NewDecoder(f).Decode(&ci); err != nil {
 		log.Panicf("%s\n", err.Error())
 	}

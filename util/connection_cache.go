@@ -17,17 +17,16 @@
 package util
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
 	"google.golang.org/grpc"
 )
 
-func NewConnectionCache(clusterInfoPath string) *connCache {
+func NewConnectionCache(cip ClusterInfoProvider) *connCache {
 	cc := &connCache{
 		nodeIDToConn: &sync.Map{},
-		ci:           readClusterInfo(clusterInfoPath),
+		cip:          cip,
 	}
 
 	return cc
@@ -42,7 +41,7 @@ type ConnectionCache interface {
 
 type connCache struct {
 	nodeIDToConn *sync.Map
-	ci           ClusterInfo
+	cip          ClusterInfoProvider
 }
 
 func (cc *connCache) GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error) {
@@ -101,6 +100,5 @@ func (cc *connCache) Close() {
 }
 
 func (cc *connCache) getAddressFor(nodeID uint64) string {
-	info := staticClusterInfo.Nodes[nodeID]
-	return fmt.Sprintf("%s:%d", info.Hostname, info.Port)
+	return cc.cip.GetAddressFor(nodeID)
 }

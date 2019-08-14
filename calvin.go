@@ -45,8 +45,9 @@ type config struct {
 
 func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	cfg := readConfig(configPath)
-	cc := util.NewConnectionCache(clusterInfoPath)
 	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
+	cc := util.NewConnectionCache(cip)
+
 	logger := log.WithFields(log.Fields{
 		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(cfg.RaftID)),
 		"raftId":    util.Uint64ToString(cfg.RaftID),

@@ -27,6 +27,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	glua "github.com/yuin/gopher-lua"
 	"google.golang.org/grpc"
 )
 
@@ -122,15 +123,17 @@ func TestWorkerBasic(t *testing.T) {
 	logger := log.WithFields(log.Fields{})
 
 	w := worker{
-		scheduledTxnChan: scheduledTxnChan,
-		readyToExecChan:  readyToExecChan,
-		doneTxnChan:      doneTxnChan,
-		store:            mockDS,
-		connCache:        mockCC,
-		cip:              mockCIP,
-		txnsToExecute:    txnsToExecute,
-		storedProcs:      &sync.Map{},
-		logger:           logger,
+		scheduledTxnChan:    scheduledTxnChan,
+		readyToExecChan:     readyToExecChan,
+		doneTxnChan:         doneTxnChan,
+		store:               mockDS,
+		connCache:           mockCC,
+		cip:                 mockCIP,
+		txnsToExecute:       txnsToExecute,
+		storedProcs:         &sync.Map{},
+		compiledStoredProcs: &sync.Map{},
+		luaState:            glua.NewState(),
+		logger:              logger,
 	}
 	go w.runWorker()
 
@@ -198,15 +201,17 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	procs.Store(simpleSetterProcName, simpleSetterProc)
 
 	w := worker{
-		scheduledTxnChan: scheduledTxnChan,
-		readyToExecChan:  readyToExecChan,
-		doneTxnChan:      doneTxnChan,
-		store:            mockDS,
-		connCache:        mockCC,
-		cip:              mockCIP,
-		txnsToExecute:    txnsToExecute,
-		storedProcs:      procs,
-		logger:           logger,
+		scheduledTxnChan:    scheduledTxnChan,
+		readyToExecChan:     readyToExecChan,
+		doneTxnChan:         doneTxnChan,
+		store:               mockDS,
+		connCache:           mockCC,
+		cip:                 mockCIP,
+		txnsToExecute:       txnsToExecute,
+		storedProcs:         procs,
+		compiledStoredProcs: &sync.Map{},
+		luaState:            glua.NewState(),
+		logger:              logger,
 	}
 	go w.runWorker()
 

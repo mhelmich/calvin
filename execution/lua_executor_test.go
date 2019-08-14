@@ -191,7 +191,9 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	procs.Store(simpleSetterProcName, simpleSetterProc)
 
 	w := &worker{
-		storedProcs: procs,
+		storedProcs:         procs,
+		luaState:            glua.NewState(),
+		compiledStoredProcs: &sync.Map{},
 	}
 	w.runLua(txn, execEnv, lds)
 
@@ -228,7 +230,9 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	procs.Store(simpleSetterProcName, simpleSetterProc)
 
 	w := &worker{
-		storedProcs: procs,
+		storedProcs:         procs,
+		luaState:            glua.NewState(),
+		compiledStoredProcs: &sync.Map{},
 	}
 
 	f1, err := os.Create("./narf.pprof")

@@ -37,8 +37,8 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	pb.RegisterRemoteReadServer(srvr, rrs)
 	txnsToExecute := &sync.Map{}
 	storedProcs := &sync.Map{}
-	compiledStoredProcs := &sync.Map{}
 	initStoredProcedures(storedProcs)
+	compiledStoredProcs := &sync.Map{}
 
 	for i := 0; i < 2; i++ {
 		w := worker{
@@ -60,10 +60,6 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	return &Engine{
 		storedProcs: storedProcs,
 	}
-}
-
-func initStoredProcedures(m *sync.Map) {
-	m.Store(simpleSetterProcName, simpleSetterProc)
 }
 
 type Engine struct {

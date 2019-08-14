@@ -16,6 +16,12 @@
 
 package execution
 
+import "sync"
+
+func initStoredProcedures(m *sync.Map) {
+	m.Store(simpleSetterProcName, simpleSetterProc)
+}
+
 const simpleSetterProcName = "__simple_setter__"
 const simpleSetterProc = `
 	for i = 1, ARGC

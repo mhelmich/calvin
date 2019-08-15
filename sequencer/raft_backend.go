@@ -164,7 +164,9 @@ func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, 
 		return
 	}
 
-	stream, err := client.StepStream(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stream, err := client.StepStream(ctx)
 	if err != nil {
 		rb.raftNode.ReportUnreachable(recipientID)
 		rb.logger.Errorf("%s", err.Error())

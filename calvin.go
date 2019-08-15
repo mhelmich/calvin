@@ -99,6 +99,8 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 		engine:    engine,
 		grpcSrvr:  srvr,
 		dataStore: dataStore,
+		logger:    logger,
+		myRaftID:  cfg.RaftID,
 	}
 }
 
@@ -110,9 +112,12 @@ type Calvin struct {
 	engine    *execution.Engine
 	grpcSrvr  *grpc.Server
 	dataStore *boltDataStore
+	logger    *log.Entry
+	myRaftID  uint64
 }
 
 func (c *Calvin) Stop() {
+	c.logger.Warningf("Shutting down calvin [%d]", c.myRaftID)
 	c.grpcSrvr.Stop()
 	c.seq.Stop()
 	time.Sleep(time.Second)

@@ -67,11 +67,16 @@ func (s *Sequencer) serveTxnBatches() {
 
 	for {
 		select {
-		case txn := <-s.writerChan:
-			if txn == nil {
+		case txn, ok := <-s.writerChan:
+			if !ok {
 				s.logger.Warningf("Stop serving txn batches")
 				close(s.proposeChan)
 				close(s.proposeConfChangeChan)
+				return
+			}
+
+			if txn == nil {
+				s.logger.Warningf("Sent nil transaction")
 				return
 			}
 

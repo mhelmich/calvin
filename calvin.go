@@ -28,7 +28,6 @@ import (
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/scheduler"
 	"github.com/mhelmich/calvin/sequencer"
-	"github.com/mhelmich/calvin/ulid"
 	"github.com/mhelmich/calvin/util"
 	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
@@ -137,11 +136,4 @@ func readConfig(path string) config {
 	}
 
 	return config
-}
-
-func NewTransaction() *pb.Transaction {
-	id, _ := ulid.NewId()
-	return &pb.Transaction{
-		Id: id.ToProto(),
-	}
 }

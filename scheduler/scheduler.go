@@ -57,9 +57,11 @@ func (s *Scheduler) runLockManager() {
 
 			for idx := range batch.Transactions {
 				txn := batch.Transactions[idx]
+				s.logger.Debugf("getting locks for txn [%s]", txn.Id.String())
 				if s.lockMgr.lock(txn) == 0 {
 					// readyId, _ := ulid.ParseIdFromProto(txn.Id)
 					// fmt.Printf("txn [%s] became ready\n", readyId.String())
+					s.logger.Debugf("txn [%s] became ready", txn.Id.String())
 					s.readyTxnsChan <- txn
 				}
 			}
@@ -72,11 +74,13 @@ func (s *Scheduler) runLockManager() {
 
 			// readyId, _ := ulid.ParseIdFromProto(txn.Id)
 			// fmt.Printf("txn [%s] became done\n", readyId.String())
+			s.logger.Debugf("txn [%s] became done", txn.Id.String())
 
 			newOwners := s.lockMgr.release(txn)
 			for idx := range newOwners {
 				// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
 				// fmt.Printf("txn [%s] became ready\n", readyId.String())
+				s.logger.Debugf("txn [%s] became ready", newOwners[idx].txn.Id.String())
 				s.readyTxnsChan <- newOwners[idx].txn
 			}
 

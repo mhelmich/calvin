@@ -77,6 +77,7 @@ func (s *Sequencer) serveTxnBatches() {
 
 			s.findParticipants(txn)
 			batch.Transactions = append(batch.Transactions, txn)
+			s.logger.Debugf("Appended txn [%s]", txn.Id.String())
 
 		case <-batchTicker.C:
 			if len(batch.Transactions) > 0 {

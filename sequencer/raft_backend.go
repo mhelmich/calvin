@@ -164,7 +164,7 @@ func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, 
 		return
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	stream, err := client.StepStream(ctx)
 	if err != nil {

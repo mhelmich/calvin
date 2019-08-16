@@ -17,6 +17,8 @@
 package scheduler
 
 import (
+	"sync"
+
 	"github.com/mhelmich/calvin/pb"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
@@ -42,48 +44,59 @@ func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<
 	ss := newServer(logger)
 	pb.RegisterSchedulerServer(srvr, ss)
 
-	go s.runLockManager()
+	m := &sync.Mutex{}
+	go s.runLocker(m)
+	go s.runReleaser(m)
 	return s
 }
 
-func (s *Scheduler) runLockManager() {
+func (s *Scheduler) runLocker(m *sync.Mutex) {
 	for {
-		select {
-		case batch := <-s.sequencerChan:
-			if batch == nil {
-				close(s.readyTxnsChan)
-				return
-			}
+		batch := <-s.sequencerChan
+		if batch == nil {
+			close(s.readyTxnsChan)
+			return
+		}
 
-			for idx := range batch.Transactions {
-				txn := batch.Transactions[idx]
-				s.logger.Debugf("getting locks for txn [%s]", txn.Id.String())
-				if s.lockMgr.lock(txn) == 0 {
-					// readyId, _ := ulid.ParseIdFromProto(txn.Id)
-					// fmt.Printf("txn [%s] became ready\n", readyId.String())
-					s.logger.Debugf("txn [%s] became ready", txn.Id.String())
-					s.readyTxnsChan <- txn
-				}
-			}
+		for idx := range batch.Transactions {
+			txn := batch.Transactions[idx]
+			s.logger.Debugf("getting locks for txn [%s]", txn.Id.String())
 
-		case txn := <-s.doneTxnChan:
-			if txn == nil {
-				close(s.readyTxnsChan)
-				return
-			}
+			m.Lock()
+			numLocksNotAcquired := s.lockMgr.lock(txn)
+			m.Unlock()
 
-			// readyId, _ := ulid.ParseIdFromProto(txn.Id)
-			// fmt.Printf("txn [%s] became done\n", readyId.String())
-			s.logger.Debugf("txn [%s] became done", txn.Id.String())
-
-			newOwners := s.lockMgr.release(txn)
-			for idx := range newOwners {
-				// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+			if numLocksNotAcquired == 0 {
+				// readyId, _ := ulid.ParseIdFromProto(txn.Id)
 				// fmt.Printf("txn [%s] became ready\n", readyId.String())
-				s.logger.Debugf("txn [%s] became ready", newOwners[idx].txn.Id.String())
-				s.readyTxnsChan <- newOwners[idx].txn
+				s.logger.Debugf("txn [%s] became ready", txn.Id.String())
+				s.readyTxnsChan <- txn
 			}
+		}
+	}
+}
 
+func (s *Scheduler) runReleaser(m *sync.Mutex) {
+	for {
+		txn := <-s.doneTxnChan
+		if txn == nil {
+			close(s.readyTxnsChan)
+			return
+		}
+
+		// readyId, _ := ulid.ParseIdFromProto(txn.Id)
+		// fmt.Printf("txn [%s] became done\n", readyId.String())
+		s.logger.Debugf("txn [%s] became done", txn.Id.String())
+
+		m.Lock()
+		newOwners := s.lockMgr.release(txn)
+		m.Unlock()
+
+		for idx := range newOwners {
+			// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+			// fmt.Printf("txn [%s] became ready\n", readyId.String())
+			s.logger.Debugf("txn [%s] became ready", newOwners[idx].txn.Id.String())
+			s.readyTxnsChan <- newOwners[idx].txn
 		}
 	}
 }

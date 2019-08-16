@@ -110,11 +110,11 @@ func (w *worker) runWorker() {
 				return
 			}
 			w.processScheduledTxn(txn, w.store)
-			atomic.AddUint64(w.counter, uint64(1))
 
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
 			w.runReadyTxn(execEnv)
+			atomic.AddUint64(w.counter, uint64(1))
 
 		}
 	}

@@ -20,9 +20,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -57,6 +59,7 @@ func (rrs *remoteReadServer) RemoteRead(ctx context.Context, req *pb.RemoteReadR
 		return nil, err
 	}
 
+	defer util.TrackTime(rrs.logger, fmt.Sprintf("RemoteRead [%s]", id.String()), time.Now())
 	v, _ := rrs.txnIdToTxnExecEnv.LoadOrStore(id.String(), &txnExecEnvironment{
 		mutex: &sync.Mutex{},
 		txnId: id,

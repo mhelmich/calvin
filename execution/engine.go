@@ -155,6 +155,7 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 }
 
 func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte) {
+	defer util.TrackTime(w.logger, "broadcastLocalReadsToWriterNodes", time.Now())
 	for idx := range txn.WriterNodes {
 		client, err := w.connCache.GetRemoteReadClient(txn.WriterNodes[idx])
 		if err != nil {
@@ -166,7 +167,9 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 			w.logger.Debugf("broadcasting remote reads for [%s] to %d", id.String(), txn.WriterNodes[idx])
 		}
 
-		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		resp, err := client.RemoteRead(ctx, &pb.RemoteReadRequest{
 			TxnId:         txn.Id,
 			TotalNumLocks: uint32(len(txn.ReadWriteSet) + len(txn.ReadSet)),
 			Keys:          keys,
@@ -179,6 +182,7 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
+	defer util.TrackTime(w.logger, "runReadyTxn", time.Now())
 	t, ok := w.txnsToExecute.Load(execEnv.txnId.String())
 	if !ok {
 		w.logger.Panicf("Can't find txn [%s]\n", execEnv.txnId.String())
@@ -191,6 +195,7 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 }
 
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
+	defer util.TrackTime(w.logger, "runTxn", time.Now())
 	lds := &luaDataStore{
 		ds:     w.store,
 		keys:   execEnv.keys,

@@ -104,3 +104,8 @@ func OutboundIP() net.IP {
 	// get the IP from an open connection
 	return localAddr.IP
 }
+
+func TrackTime(logger *log.Entry, name string, start time.Time) {
+	elapsed := time.Since(start)
+	logger.Debugf("TrackTime: running %s took %s", name, elapsed)
+}

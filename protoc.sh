@@ -20,3 +20,10 @@ protoc \
   -I=./vendor/github.com/gogo/protobuf \
   --gofast_out=plugins=grpc:. \
   pb/*.proto
+
+  protoc \
+    -I=. \
+    -I=./vendor \
+    -I=./vendor/github.com/gogo/protobuf \
+    --gofast_out=plugins=grpc:. \
+    tpcc/pb/*.proto

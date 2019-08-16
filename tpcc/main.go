@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/mhelmich/calvin"
@@ -26,15 +27,23 @@ import (
 )
 
 func main() {
-	configPath := os.Args[1]
-	clusterInfoPath := os.Args[2]
-	c := calvin.NewCalvin(configPath, clusterInfoPath)
+	cfgFile := os.Args[1]
+	port, err := strconv.Atoi(os.Args[2])
+	if err != nil {
+		log.Panicf("'%s' is not a number", os.Args[2])
+	}
 
-	ch := make(chan os.Signal, 1)
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-ch
-	log.Warningf("Received signal: %s\n", sig)
+	log.SetLevel(log.DebugLevel)
 
+	c := calvin.NewCalvin(cfgFile, "./cluster_info.toml")
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+
+	logger := log.WithFields(log.Fields{})
+	startNewHttpServer(port, c, logger)
+
+	<-sig
+	logger.Warningf("Shutting down...\n")
 	c.Stop()
-	log.Exit(0)
 }

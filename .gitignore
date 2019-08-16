@@ -26,3 +26,5 @@
 **/cluster_info-*.toml
 */*.pprof
 */*.mprof
+
+tpcc/tpcc

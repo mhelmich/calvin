@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
@@ -39,6 +41,7 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	storedProcs := &sync.Map{}
 	initStoredProcedures(storedProcs)
 	compiledStoredProcs := &sync.Map{}
+	counter := uint64(0)
 
 	for i := 0; i < 2; i++ {
 		w := worker{
@@ -53,17 +56,32 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 			luaState:            glua.NewState(),
 			compiledStoredProcs: compiledStoredProcs,
 			logger:              logger,
+			counter:             &counter,
 		}
 		go w.runWorker()
 	}
 
-	return &Engine{
+	e := &Engine{
 		storedProcs: storedProcs,
+		counter:     &counter,
 	}
+
+	if log.GetLevel() == log.DebugLevel {
+		go func() {
+			for {
+				c := atomic.LoadUint64(e.counter)
+				logger.Debugf("processed %d txns", c)
+				time.Sleep(time.Second)
+			}
+		}()
+	}
+
+	return e
 }
 
 type Engine struct {
 	storedProcs *sync.Map
+	counter     *uint64
 }
 
 type worker struct {
@@ -78,6 +96,7 @@ type worker struct {
 	compiledStoredProcs *sync.Map
 	luaState            *glua.LState
 	logger              *log.Entry
+	counter             *uint64
 }
 
 func (w *worker) runWorker() {
@@ -91,6 +110,7 @@ func (w *worker) runWorker() {
 				return
 			}
 			w.processScheduledTxn(txn, w.store)
+			atomic.AddUint64(w.counter, uint64(1))
 
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
@@ -139,6 +159,11 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 		client, err := w.connCache.GetRemoteReadClient(txn.WriterNodes[idx])
 		if err != nil {
 			w.logger.Panicf("%s\n", err.Error())
+		}
+
+		if log.GetLevel() == log.DebugLevel {
+			id, _ := ulid.ParseIdFromProto(txn.Id)
+			w.logger.Debugf("broadcasting remote reads for [%s] to %d", id.String(), txn.WriterNodes[idx])
 		}
 
 		resp, err := client.RemoteRead(context.Background(), &pb.RemoteReadRequest{

@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -60,16 +61,20 @@ func (s *Scheduler) runLocker(m *sync.Mutex) {
 
 		for idx := range batch.Transactions {
 			txn := batch.Transactions[idx]
-			s.logger.Debugf("getting locks for txn [%s]", txn.Id.String())
+			if log.GetLevel() == log.DebugLevel {
+				id, _ := ulid.ParseIdFromProto(txn.Id)
+				s.logger.Debugf("getting locks for txn [%s]", id.String())
+			}
 
 			m.Lock()
 			numLocksNotAcquired := s.lockMgr.lock(txn)
 			m.Unlock()
 
 			if numLocksNotAcquired == 0 {
-				// readyId, _ := ulid.ParseIdFromProto(txn.Id)
-				// fmt.Printf("txn [%s] became ready\n", readyId.String())
-				s.logger.Debugf("txn [%s] became ready", txn.Id.String())
+				if log.GetLevel() == log.DebugLevel {
+					id, _ := ulid.ParseIdFromProto(txn.Id)
+					s.logger.Debugf("txn [%s] became ready\n", id.String())
+				}
 				s.readyTxnsChan <- txn
 			}
 		}
@@ -84,18 +89,20 @@ func (s *Scheduler) runReleaser(m *sync.Mutex) {
 			return
 		}
 
-		// readyId, _ := ulid.ParseIdFromProto(txn.Id)
-		// fmt.Printf("txn [%s] became done\n", readyId.String())
-		s.logger.Debugf("txn [%s] became done", txn.Id.String())
+		if log.GetLevel() == log.DebugLevel {
+			id, _ := ulid.ParseIdFromProto(txn.Id)
+			s.logger.Debugf("txn [%s] became done\n", id.String())
+		}
 
 		m.Lock()
 		newOwners := s.lockMgr.release(txn)
 		m.Unlock()
 
 		for idx := range newOwners {
-			// readyId, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
-			// fmt.Printf("txn [%s] became ready\n", readyId.String())
-			s.logger.Debugf("txn [%s] became ready", newOwners[idx].txn.Id.String())
+			if log.GetLevel() == log.DebugLevel {
+				id, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+				s.logger.Debugf("txn [%s] became ready\n", id.String())
+			}
 			s.readyTxnsChan <- newOwners[idx].txn
 		}
 	}

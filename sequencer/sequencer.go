@@ -18,9 +18,12 @@ package sequencer
 
 import (
 	"io"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
@@ -82,7 +85,21 @@ func (s *Sequencer) serveTxnBatches() {
 
 			s.findParticipants(txn)
 			batch.Transactions = append(batch.Transactions, txn)
-			s.logger.Debugf("Appended txn [%s]", txn.Id.String())
+			if log.GetLevel() == log.DebugLevel {
+				id, _ := ulid.ParseIdFromProto(txn.Id)
+				s.logger.Debugf("Appended txn [%s]", id.String())
+				a := make([]string, 0)
+				for idx := range txn.WriterNodes {
+					a = append(a, strconv.FormatUint(txn.WriterNodes[idx], 10))
+				}
+				s.logger.Debugf("[%s] WriterNodes: %s", id.String(), strings.Join(a, ", "))
+
+				a = make([]string, 0)
+				for idx := range txn.ReaderNodes {
+					a = append(a, strconv.FormatUint(txn.ReaderNodes[idx], 10))
+				}
+				s.logger.Debugf("[%s] ReaderNodes: %s", id.String(), strings.Join(a, ", "))
+			}
 
 		case <-batchTicker.C:
 			if len(batch.Transactions) > 0 {

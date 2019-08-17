@@ -20,7 +20,8 @@ rm mocks/*.go
 
 mockery -dir util -name ClusterInfoProvider -output "$(dirname "$0")/mocks"
 mockery -dir util -name ConnectionCache -output "$(dirname "$0")/mocks"
-mockery -dir execution -name DataStore -output "$(dirname "$0")/mocks"
+mockery -dir util -name DataStore -output "$(dirname "$0")/mocks"
+mockery -dir util -name DataStoreTxn -output "$(dirname "$0")/mocks"
 mockery -dir pb -name RemoteReadClient -output "$(dirname "$0")/mocks"
 
 go mod tidy

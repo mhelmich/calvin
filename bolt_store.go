@@ -20,6 +20,7 @@ import (
 	"time"
 
 	bolt "github.com/coreos/bbolt"
+	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -54,25 +55,41 @@ func newBoltDataStore(dir string, logger *log.Entry) *boltDataStore {
 
 type boltDataStore struct {
 	db     *bolt.DB
+	txn    *bolt.Tx
 	logger *log.Entry
 }
 
 func (bds *boltDataStore) Get(key []byte) []byte {
-	var val []byte
-	bds.db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		val = b.Get(key)
-		return nil
-	})
-	return val
+	// var val []byte
+	// bds.db.View(func(tx *bolt.Tx) error {
+	// 	b := tx.Bucket([]byte(bucketName))
+	// 	val = b.Get(key)
+	// 	return nil
+	// })
+	// return val
+
+	b := bds.txn.Bucket([]byte(bucketName))
+	return b.Get(key)
 }
 
 func (bds *boltDataStore) Set(key []byte, value []byte) {
-	bds.db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(bucketName))
-		err := b.Put(key, value)
-		return err
-	})
+	// bds.db.Update(func(tx *bolt.Tx) error {
+	// 	b := tx.Bucket([]byte(bucketName))
+	// 	err := b.Put(key, value)
+	// 	return err
+	// })
+
+	b := bds.txn.Bucket([]byte(bucketName))
+	err := b.Put(key, value)
+	if err != nil {
+		bds.logger.Errorf("%s", err.Error())
+	}
+}
+
+func (bds *boltDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
+	var err error
+	bds.txn, err = bds.db.Begin(writable)
+	return bds.txn, err
 }
 
 func (bds *boltDataStore) close() {

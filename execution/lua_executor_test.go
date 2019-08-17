@@ -24,6 +24,7 @@ import (
 
 	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	glua "github.com/yuin/gopher-lua"
@@ -268,4 +269,18 @@ func (ds *mapDataStore) Set(key []byte, value []byte) {
 	k := string(key)
 	v := string(value)
 	ds.m[k] = v
+}
+
+func (ds *mapDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
+	return &mapDataStoreTxn{}, nil
+}
+
+type mapDataStoreTxn struct{}
+
+func (dt *mapDataStoreTxn) Commit() error {
+	return nil
+}
+
+func (dt *mapDataStoreTxn) Rollback() error {
+	return nil
 }

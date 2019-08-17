@@ -32,7 +32,7 @@ import (
 	gluar "layeh.com/gopher-luar"
 )
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store util.DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
 
 	rrs := newRemoteReadServer(readyToExecChan, logger)
@@ -88,7 +88,7 @@ type worker struct {
 	scheduledTxnChan    <-chan *pb.Transaction
 	readyToExecChan     <-chan *txnExecEnvironment
 	doneTxnChan         chan<- *pb.Transaction
-	store               DataStore
+	store               util.DataStore
 	connCache           util.ConnectionCache
 	cip                 util.ClusterInfoProvider
 	txnsToExecute       *sync.Map
@@ -120,10 +120,14 @@ func (w *worker) runWorker() {
 	}
 }
 
-func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
+func (w *worker) processScheduledTxn(txn *pb.Transaction, store util.DataStore) {
 	localKeys := make([][]byte, 0)
 	localValues := make([][]byte, 0)
 	// do local reads
+	dsTxn, err := store.StartTxn(false)
+	if err != nil {
+		w.logger.Panicf("Can't start txn: %s", err.Error())
+	}
 	for idx := range txn.ReadSet {
 		key := txn.ReadSet[idx]
 		if w.cip.IsLocal(key) {
@@ -139,6 +143,10 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store DataStore) {
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
 		}
+	}
+	err = dsTxn.Rollback()
+	if err != nil {
+		w.logger.Panicf("Can't roll back txn: %s", err.Error())
 	}
 
 	if w.cip.AmIWriter(txn.WriterNodes) {
@@ -202,7 +210,21 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error 
 		values: execEnv.values,
 		cip:    w.cip,
 	}
-	return w.runLua(txn, execEnv, lds)
+
+	dsTxn, err := lds.StartTxn(true)
+	if err != nil {
+		return err
+	}
+	err = w.runLua(txn, execEnv, lds)
+	if err != nil {
+		err2 := dsTxn.Rollback()
+		if err2 != nil {
+			return fmt.Errorf("%s %s", err.Error(), err2.Error())
+		}
+		return err
+	}
+
+	return dsTxn.Commit()
 }
 
 func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *luaDataStore) error {

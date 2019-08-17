@@ -23,13 +23,8 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type DataStore interface {
-	Get(key []byte) []byte
-	Set(key []byte, value []byte)
-}
-
 type luaDataStore struct {
-	ds     DataStore
+	ds     util.DataStore
 	keys   [][]byte
 	values [][]byte
 	cip    util.ClusterInfoProvider
@@ -57,6 +52,10 @@ func (lds *luaDataStore) Set(key string, value string) {
 	}
 
 	lds.ds.Set([]byte(key), []byte(value))
+}
+
+func (lds *luaDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
+	return lds.ds.StartTxn(writable)
 }
 
 func (lds *luaDataStore) getValueFor(key []byte) ([]byte, bool) {

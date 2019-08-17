@@ -74,8 +74,8 @@ func (rrs *remoteReadServer) RemoteRead(ctx context.Context, req *pb.RemoteReadR
 	if int(req.TotalNumLocks) == len(execEnv.keys) {
 		// this txn can run
 		rrs.logger.Debugf("txn [%s] can run", id.String())
-		rrs.readyToExecChan <- execEnv
 		rrs.txnIdToTxnExecEnv.Delete(id.String())
+		rrs.readyToExecChan <- execEnv
 	} else {
 		rrs.logger.Debugf("stashing remote reads for txn [%s]", id.String())
 		rrs.txnIdToTxnExecEnv.Store(id.String(), execEnv)

@@ -32,8 +32,12 @@ import (
 	gluar "layeh.com/gopher-luar"
 )
 
+const (
+	numWorkers = 2
+)
+
 func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store util.DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
-	readyToExecChan := make(chan *txnExecEnvironment, 1)
+	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2)
 
 	rrs := newRemoteReadServer(readyToExecChan, logger)
 	pb.RegisterRemoteReadServer(srvr, rrs)
@@ -43,7 +47,7 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	compiledStoredProcs := &sync.Map{}
 	counter := uint64(0)
 
-	for i := 0; i < 2; i++ {
+	for i := 0; i < numWorkers; i++ {
 		w := worker{
 			scheduledTxnChan:    scheduledTxnChan,
 			readyToExecChan:     readyToExecChan,
@@ -175,8 +179,9 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 			w.logger.Debugf("broadcasting remote reads for [%s] to %d", id.String(), txn.WriterNodes[idx])
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// defer cancel()
+		ctx := context.Background()
 		resp, err := client.RemoteRead(ctx, &pb.RemoteReadRequest{
 			TxnId:         txn.Id,
 			TotalNumLocks: uint32(len(txn.ReadWriteSet) + len(txn.ReadSet)),

@@ -25,17 +25,9 @@ func (m *Transaction) AddSimpleSetterArg(key []byte, value []byte) error {
 		return fmt.Errorf("Can't add simple setter arg to txn not calling '__simple_setter__'")
 	}
 
-	arg := &SimpleSetterArg{
-		Key:   key,
-		Value: value,
-	}
-
-	bites, err := arg.Marshal()
-	if err != nil {
-		return err
-	}
-
-	m.StoredProcedureArgs = append(m.StoredProcedureArgs, bites)
+	// the index for the key and value need to align
+	// otherwise the lua script doesn't work :)
 	m.ReadWriteSet = append(m.ReadWriteSet, key)
+	m.StoredProcedureArgs = append(m.StoredProcedureArgs, value)
 	return nil
 }

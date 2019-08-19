@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func newLuaDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byte, cip util.ClusterInfoProvider) *luaDataStore {
+func newStoredProcDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byte, cip util.ClusterInfoProvider) *storedProcDataStore {
 	m := make(map[string][]byte, len(keys))
 
 	for idx := range keys {
@@ -30,20 +30,20 @@ func newLuaDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byte, cip 
 		m[k] = v
 	}
 
-	return &luaDataStore{
+	return &storedProcDataStore{
 		txn:  txn,
 		data: m,
 		cip:  cip,
 	}
 }
 
-type luaDataStore struct {
+type storedProcDataStore struct {
 	txn  util.DataStoreTxn
 	data map[string][]byte
 	cip  util.ClusterInfoProvider
 }
 
-func (lds *luaDataStore) Get(key string) string {
+func (lds *storedProcDataStore) Get(key string) string {
 	val, ok := lds.data[key]
 	if !ok {
 		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
@@ -53,7 +53,7 @@ func (lds *luaDataStore) Get(key string) string {
 	return string(val)
 }
 
-func (lds *luaDataStore) Set(key string, value string) {
+func (lds *storedProcDataStore) Set(key string, value string) {
 	if !lds.cip.IsLocal([]byte(key)) {
 		// log.Warningf("you tried to access key [%s] but the key wasn't local", key)
 		return

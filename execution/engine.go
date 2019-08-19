@@ -118,7 +118,7 @@ func (w *worker) runWorker() {
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
 			w.runReadyTxn(execEnv)
-			// atomic.AddUint64(w.counter, uint64(1))
+			atomic.AddUint64(w.counter, uint64(1))
 
 		}
 	}
@@ -179,9 +179,8 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 			w.logger.Debugf("broadcasting remote reads for [%s] to %d", id.String(), txn.WriterNodes[idx])
 		}
 
-		// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		// defer cancel()
-		ctx := context.Background()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		resp, err := client.RemoteRead(ctx, &pb.RemoteReadRequest{
 			TxnId:         txn.Id,
 			TotalNumLocks: uint32(len(txn.ReadWriteSet) + len(txn.ReadSet)),
@@ -218,9 +217,7 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error 
 		return err
 	}
 
-	lds := newLuaDataStore(dsTxn, execEnv.keys, execEnv.values, w.cip)
-
-	w.logger.Debugf("")
+	lds := newStoredProcDataStore(dsTxn, execEnv.keys, execEnv.values, w.cip)
 
 	err = w.runLua(txn, execEnv, lds)
 	if err != nil {
@@ -234,7 +231,7 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error 
 	return dsTxn.Commit()
 }
 
-func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *luaDataStore) error {
+func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *storedProcDataStore) error {
 	fction, ok := w.compiledStoredProcs.Load(txn.StoredProcedure)
 	if !ok {
 		v, ok := w.storedProcs.Load(txn.StoredProcedure)

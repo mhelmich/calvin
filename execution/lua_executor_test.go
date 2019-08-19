@@ -37,7 +37,7 @@ func TestLuaExecutorGluar(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := newLuaDataStore(&mapDataStoreTxn{
+	lds := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
 	}, [][]byte{[]byte("hello")}, [][]byte{nil}, mockCIP)
 
@@ -117,7 +117,7 @@ func TestLuaExecutorFancy(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	store := newLuaDataStore(&mapDataStoreTxn{
+	store := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
 	}, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
 
@@ -168,7 +168,7 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := newLuaDataStore(&mapDataStoreTxn{
+	lds := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
 	}, execEnv.keys, execEnv.values, mockCIP)
 
@@ -202,7 +202,7 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := newLuaDataStore(&mapDataStoreTxn{
+	lds := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
 	}, execEnv.keys, execEnv.values, mockCIP)
 

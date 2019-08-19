@@ -36,7 +36,7 @@ const (
 	numWorkers = 2
 )
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, store util.DataStore, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTransactionProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2)
 
 	rrs := newRemoteReadServer(readyToExecChan, logger)
@@ -52,7 +52,7 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 			scheduledTxnChan:    scheduledTxnChan,
 			readyToExecChan:     readyToExecChan,
 			doneTxnChan:         doneTxnChan,
-			store:               store,
+			stp:                 stp,
 			connCache:           connCache,
 			cip:                 cip,
 			txnsToExecute:       txnsToExecute,
@@ -92,7 +92,7 @@ type worker struct {
 	scheduledTxnChan    <-chan *pb.Transaction
 	readyToExecChan     <-chan *txnExecEnvironment
 	doneTxnChan         chan<- *pb.Transaction
-	store               util.DataStore
+	stp                 util.DataStoreTransactionProvider
 	connCache           util.ConnectionCache
 	cip                 util.ClusterInfoProvider
 	txnsToExecute       *sync.Map
@@ -113,29 +113,29 @@ func (w *worker) runWorker() {
 				w.luaState.Close()
 				return
 			}
-			w.processScheduledTxn(txn, w.store)
+			w.processScheduledTxn(txn)
 
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
 			w.runReadyTxn(execEnv)
-			atomic.AddUint64(w.counter, uint64(1))
+			// atomic.AddUint64(w.counter, uint64(1))
 
 		}
 	}
 }
 
-func (w *worker) processScheduledTxn(txn *pb.Transaction, store util.DataStore) {
+func (w *worker) processScheduledTxn(txn *pb.Transaction) {
 	localKeys := make([][]byte, 0)
 	localValues := make([][]byte, 0)
 	// do local reads
-	dsTxn, err := store.StartTxn(false)
+	dsTxn, err := w.stp.StartTxn(false)
 	if err != nil {
 		w.logger.Panicf("Can't start txn: %s", err.Error())
 	}
 	for idx := range txn.ReadSet {
 		key := txn.ReadSet[idx]
 		if w.cip.IsLocal(key) {
-			value := store.Get(key)
+			value := dsTxn.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
 		}
@@ -143,7 +143,7 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction, store util.DataStore) 
 	for idx := range txn.ReadWriteSet {
 		key := txn.ReadWriteSet[idx]
 		if w.cip.IsLocal(key) {
-			value := store.Get(key)
+			value := dsTxn.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
 		}
@@ -203,30 +203,32 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	w.txnsToExecute.Delete(execEnv.txnId.String())
 	txn := t.(*pb.Transaction)
 
-	w.runTxn(txn, execEnv)
+	err := w.runTxn(txn, execEnv)
+	if err != nil {
+		w.logger.Panicf("%s", err.Error())
+	}
 	w.doneTxnChan <- txn
 }
 
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
 	defer util.TrackTime(w.logger, "runTxn", time.Now())
-	lds := &luaDataStore{
-		ds:     w.store,
-		keys:   execEnv.keys,
-		values: execEnv.values,
-		cip:    w.cip,
-	}
 
-	dsTxn, err := lds.StartTxn(true)
+	dsTxn, err := w.stp.StartTxn(true)
 	if err != nil {
 		return err
 	}
+
+	lds := newLuaDataStore(dsTxn, execEnv.keys, execEnv.values, w.cip)
+
+	w.logger.Debugf("")
+
 	err = w.runLua(txn, execEnv, lds)
 	if err != nil {
 		err2 := dsTxn.Rollback()
 		if err2 != nil {
 			return fmt.Errorf("%s %s", err.Error(), err2.Error())
 		}
-		return err
+		return fmt.Errorf("error running lua: %s", err.Error())
 	}
 
 	return dsTxn.Commit()

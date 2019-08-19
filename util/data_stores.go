@@ -16,13 +16,13 @@
 
 package util
 
-type DataStore interface {
-	Get(key []byte) []byte
-	Set(key []byte, value []byte)
+type DataStoreTransactionProvider interface {
 	StartTxn(writable bool) (DataStoreTxn, error)
 }
 
 type DataStoreTxn interface {
+	Get(key []byte) []byte
+	Set(key []byte, value []byte) error
 	Commit() error
 	Rollback() error
 }

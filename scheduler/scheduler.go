@@ -53,10 +53,13 @@ func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<
 
 func (s *Scheduler) runLocker(m *sync.Mutex) {
 	for {
-		batch := <-s.sequencerChan
-		if batch == nil {
+		batch, ok := <-s.sequencerChan
+		if !ok {
 			close(s.readyTxnsChan)
+			s.logger.Warningf("Stopping lock locker")
 			return
+		} else if batch == nil {
+			s.logger.Warningf("Received nil txn batch")
 		}
 
 		for idx := range batch.Transactions {
@@ -83,9 +86,9 @@ func (s *Scheduler) runLocker(m *sync.Mutex) {
 
 func (s *Scheduler) runReleaser(m *sync.Mutex) {
 	for {
-		txn := <-s.doneTxnChan
-		if txn == nil {
-			close(s.readyTxnsChan)
+		txn, ok := <-s.doneTxnChan
+		if !ok {
+			s.logger.Warningf("Stopping lock releaser")
 			return
 		}
 

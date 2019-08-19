@@ -34,10 +34,14 @@ import (
 func TestEngineBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
 	doneTxnChan := make(chan *pb.Transaction)
-	mockDS := new(mocks.DataStore)
-	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
+	mockTXN := new(mocks.DataStoreTxn)
+	mockTXN.On("Rollback").Return(nil)
+	mockTXN.On("Commit").Return(nil)
+	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
+	mockDS := new(mocks.DataStore)
+	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 	srvr := grpc.NewServer()
 
 	mockRRC := new(mocks.RemoteReadClient)
@@ -86,10 +90,14 @@ func TestWorkerBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
 	doneTxnChan := make(chan *pb.Transaction)
-	mockDS := new(mocks.DataStore)
-	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
+	mockTXN := new(mocks.DataStoreTxn)
+	mockTXN.On("Rollback").Return(nil)
+	mockTXN.On("Commit").Return(nil)
+	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
+	mockDS := new(mocks.DataStore)
+	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 
 	mockRRC := new(mocks.RemoteReadClient)
 	mockRRC.On("RemoteRead", mock.Anything, mock.AnythingOfType("*pb.RemoteReadRequest")).Run(
@@ -121,16 +129,18 @@ func TestWorkerBasic(t *testing.T) {
 
 	txnsToExecute := &sync.Map{}
 	logger := log.WithFields(log.Fields{})
+	procs := &sync.Map{}
+	initStoredProcedures(procs)
 
 	w := worker{
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
 		doneTxnChan:         doneTxnChan,
-		store:               mockDS,
+		stp:                 mockDS,
 		connCache:           mockCC,
 		cip:                 mockCIP,
 		txnsToExecute:       txnsToExecute,
-		storedProcs:         &sync.Map{},
+		storedProcs:         procs,
 		compiledStoredProcs: &sync.Map{},
 		luaState:            glua.NewState(),
 		logger:              logger,
@@ -141,7 +151,8 @@ func TestWorkerBasic(t *testing.T) {
 	assert.Nil(t, err)
 
 	txn := &pb.Transaction{
-		Id: id.ToProto(),
+		Id:              id.ToProto(),
+		StoredProcedure: simpleSetterProcName,
 	}
 	txnsToExecute.Store(id.String(), txn)
 
@@ -160,11 +171,16 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
 	doneTxnChan := make(chan *pb.Transaction)
-	mockDS := new(mocks.DataStore)
-	mockDS.On("Get", mock.AnythingOfType("[]uint8")).Return(
+
+	mockTXN := new(mocks.DataStoreTxn)
+	mockTXN.On("Rollback").Return(nil)
+	mockTXN.On("Commit").Return(nil)
+	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
-	mockDS.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return()
+	mockTXN.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockDS := new(mocks.DataStore)
+	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 
 	mockRRC := new(mocks.RemoteReadClient)
 	mockRRC.On("RemoteRead", mock.Anything, mock.AnythingOfType("*pb.RemoteReadRequest")).Run(
@@ -198,13 +214,13 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	logger := log.WithFields(log.Fields{})
 
 	procs := &sync.Map{}
-	procs.Store(simpleSetterProcName, simpleSetterProc)
+	initStoredProcedures(procs)
 
 	w := worker{
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
 		doneTxnChan:         doneTxnChan,
-		store:               mockDS,
+		stp:                 mockDS,
 		connCache:           mockCC,
 		cip:                 mockCIP,
 		txnsToExecute:       txnsToExecute,
@@ -218,22 +234,25 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	id, err := ulid.NewId()
 	assert.Nil(t, err)
 
-	arg := &pb.SimpleSetterArg{
-		Key:   []byte("k1"),
-		Value: []byte("v1"),
-	}
-	argBites, err := arg.Marshal()
-	assert.Nil(t, err)
+	// arg := &pb.SimpleSetterArg{
+	// 	Key:   []byte("narf"),
+	// 	Value: []byte("narf_value"),
+	// }
+	// argBites, err := arg.Marshal()
+	// assert.Nil(t, err)
 
 	txn := &pb.Transaction{
-		Id:                  id.ToProto(),
-		StoredProcedure:     "__simple_setter__",
-		StoredProcedureArgs: [][]byte{argBites},
+		Id:              id.ToProto(),
+		StoredProcedure: simpleSetterProcName,
+		// StoredProcedureArgs: [][]byte{argBites},
+		StoredProcedureArgs: [][]byte{[]byte("narf")},
 	}
 	txnsToExecute.Store(id.String(), txn)
 
 	readyToExecChan <- &txnExecEnvironment{
-		txnId: id,
+		txnId:  id,
+		keys:   [][]byte{[]byte("narf")},
+		values: [][]byte{[]byte("narf_value")},
 	}
 
 	doneTxn := <-doneTxnChan

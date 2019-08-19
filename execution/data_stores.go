@@ -17,25 +17,38 @@
 package execution
 
 import (
-	"bytes"
-
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
 
+func newLuaDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byte, cip util.ClusterInfoProvider) *luaDataStore {
+	m := make(map[string][]byte, len(keys))
+
+	for idx := range keys {
+		k := string(keys[idx])
+		v := values[idx]
+		m[k] = v
+	}
+
+	return &luaDataStore{
+		txn:  txn,
+		data: m,
+		cip:  cip,
+	}
+}
+
 type luaDataStore struct {
-	ds     util.DataStore
-	keys   [][]byte
-	values [][]byte
-	cip    util.ClusterInfoProvider
+	txn  util.DataStoreTxn
+	data map[string][]byte
+	cip  util.ClusterInfoProvider
 }
 
 func (lds *luaDataStore) Get(key string) string {
-	val, ok := lds.getValueFor([]byte(key))
+	val, ok := lds.data[key]
 	if !ok {
 		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
 	} else if val == nil {
-		return string(lds.ds.Get([]byte(key)))
+		return string(lds.txn.Get([]byte(key)))
 	}
 	return string(val)
 }
@@ -46,23 +59,10 @@ func (lds *luaDataStore) Set(key string, value string) {
 		return
 	}
 
-	_, ok := lds.getValueFor([]byte(key))
+	_, ok := lds.data[key]
 	if !ok {
 		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
 	}
 
-	lds.ds.Set([]byte(key), []byte(value))
-}
-
-func (lds *luaDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
-	return lds.ds.StartTxn(writable)
-}
-
-func (lds *luaDataStore) getValueFor(key []byte) ([]byte, bool) {
-	for idx := range lds.keys {
-		if bytes.Compare(lds.keys[idx], key) == 0 {
-			return lds.values[idx], true
-		}
-	}
-	return nil, false
+	lds.txn.Set([]byte(key), []byte(value))
 }

@@ -23,6 +23,22 @@ func (_m *DataStoreTxn) Commit() error {
 	return r0
 }
 
+// Get provides a mock function with given fields: key
+func (_m *DataStoreTxn) Get(key []byte) []byte {
+	ret := _m.Called(key)
+
+	var r0 []byte
+	if rf, ok := ret.Get(0).(func([]byte) []byte); ok {
+		r0 = rf(key)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+
+	return r0
+}
+
 // Rollback provides a mock function with given fields:
 func (_m *DataStoreTxn) Rollback() error {
 	ret := _m.Called()
@@ -30,6 +46,20 @@ func (_m *DataStoreTxn) Rollback() error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func() error); ok {
 		r0 = rf()
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// Set provides a mock function with given fields: key, value
+func (_m *DataStoreTxn) Set(key []byte, value []byte) error {
+	ret := _m.Called(key, value)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func([]byte, []byte) error); ok {
+		r0 = rf(key, value)
 	} else {
 		r0 = ret.Error(0)
 	}

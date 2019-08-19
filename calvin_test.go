@@ -53,9 +53,10 @@ func TestCalvinPushTxns(t *testing.T) {
 		id, err := ulid.NewId()
 		assert.Nil(t, err)
 		c.SubmitTransaction(&pb.Transaction{
-			Id:           id.ToProto(),
-			WriterNodes:  []uint64{configBag.id},
-			ReadWriteSet: [][]byte{[]byte("narf")},
+			Id:              id.ToProto(),
+			WriterNodes:     []uint64{configBag.id},
+			ReadWriteSet:    [][]byte{[]byte("narf")},
+			StoredProcedure: "__simple_setter__",
 		})
 	}
 

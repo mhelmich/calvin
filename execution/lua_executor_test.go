@@ -24,7 +24,6 @@ import (
 
 	"github.com/mhelmich/calvin/mocks"
 	"github.com/mhelmich/calvin/pb"
-	"github.com/mhelmich/calvin/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	glua "github.com/yuin/gopher-lua"
@@ -38,14 +37,9 @@ func TestLuaExecutorGluar(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := &luaDataStore{
-		ds: &mapDataStore{
-			m: make(map[string]string),
-		},
-		keys:   [][]byte{[]byte("hello")},
-		values: [][]byte{nil},
-		cip:    mockCIP,
-	}
+	lds := newLuaDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, [][]byte{[]byte("hello")}, [][]byte{nil}, mockCIP)
 
 	lua.SetGlobal("store", gluar.New(lua, lds))
 	script := `
@@ -123,14 +117,9 @@ func TestLuaExecutorFancy(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	store := &luaDataStore{
-		ds: &mapDataStore{
-			m: make(map[string]string),
-		},
-		keys:   [][]byte{[]byte("moep"), []byte("narf")},
-		values: [][]byte{[]byte("moep_value"), []byte("narf_value")},
-		cip:    mockCIP,
-	}
+	store := newLuaDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
 
 	keys := []string{"narf", "moep"}
 	args := []string{"narf_value", "moep_value"}
@@ -179,14 +168,9 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := &luaDataStore{
-		ds: &mapDataStore{
-			m: make(map[string]string),
-		},
-		keys:   execEnv.keys,
-		values: execEnv.values,
-		cip:    mockCIP,
-	}
+	lds := newLuaDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, execEnv.keys, execEnv.values, mockCIP)
 
 	procs := &sync.Map{}
 	procs.Store(simpleSetterProcName, simpleSetterProc)
@@ -218,14 +202,9 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 
-	lds := &luaDataStore{
-		ds: &mapDataStore{
-			m: make(map[string]string),
-		},
-		keys:   execEnv.keys,
-		values: execEnv.values,
-		cip:    mockCIP,
-	}
+	lds := newLuaDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, execEnv.keys, execEnv.values, mockCIP)
 
 	procs := &sync.Map{}
 	procs.Store(simpleSetterProcName, simpleSetterProc)
@@ -255,27 +234,22 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	assert.Equal(b, "moep_arg", v)
 }
 
-type mapDataStore struct {
+type mapDataStoreTxn struct {
 	m map[string]string
 }
 
-func (ds *mapDataStore) Get(key []byte) []byte {
+func (ds *mapDataStoreTxn) Get(key []byte) []byte {
 	k := string(key)
 	v := ds.m[k]
 	return []byte(v)
 }
 
-func (ds *mapDataStore) Set(key []byte, value []byte) {
+func (ds *mapDataStoreTxn) Set(key []byte, value []byte) error {
 	k := string(key)
 	v := string(value)
 	ds.m[k] = v
+	return nil
 }
-
-func (ds *mapDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
-	return &mapDataStoreTxn{}, nil
-}
-
-type mapDataStoreTxn struct{}
 
 func (dt *mapDataStoreTxn) Commit() error {
 	return nil

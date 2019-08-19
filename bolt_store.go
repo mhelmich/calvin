@@ -55,41 +55,37 @@ func newBoltDataStore(dir string, logger *log.Entry) *boltDataStore {
 
 type boltDataStore struct {
 	db     *bolt.DB
-	txn    *bolt.Tx
 	logger *log.Entry
 }
 
-func (bds *boltDataStore) Get(key []byte) []byte {
-	// var val []byte
-	// bds.db.View(func(tx *bolt.Tx) error {
-	// 	b := tx.Bucket([]byte(bucketName))
-	// 	val = b.Get(key)
-	// 	return nil
-	// })
-	// return val
+func (bds *boltDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
+	txn, err := bds.db.Begin(writable)
+	t := &boltDataStoreTxn{
+		txn: txn,
+	}
+	return t, err
+}
 
-	b := bds.txn.Bucket([]byte(bucketName))
+type boltDataStoreTxn struct {
+	txn *bolt.Tx
+}
+
+func (t *boltDataStoreTxn) Get(key []byte) []byte {
+	b := t.txn.Bucket([]byte(bucketName))
 	return b.Get(key)
 }
 
-func (bds *boltDataStore) Set(key []byte, value []byte) {
-	// bds.db.Update(func(tx *bolt.Tx) error {
-	// 	b := tx.Bucket([]byte(bucketName))
-	// 	err := b.Put(key, value)
-	// 	return err
-	// })
-
-	b := bds.txn.Bucket([]byte(bucketName))
-	err := b.Put(key, value)
-	if err != nil {
-		bds.logger.Errorf("%s", err.Error())
-	}
+func (t *boltDataStoreTxn) Set(key []byte, value []byte) error {
+	b := t.txn.Bucket([]byte(bucketName))
+	return b.Put(key, value)
 }
 
-func (bds *boltDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
-	var err error
-	bds.txn, err = bds.db.Begin(writable)
-	return bds.txn, err
+func (t *boltDataStoreTxn) Commit() error {
+	return t.txn.Commit()
+}
+
+func (t *boltDataStoreTxn) Rollback() error {
+	return t.txn.Rollback()
 }
 
 func (bds *boltDataStore) close() {

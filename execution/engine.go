@@ -125,33 +125,7 @@ func (w *worker) runWorker() {
 }
 
 func (w *worker) processScheduledTxn(txn *pb.Transaction) {
-	localKeys := make([][]byte, 0)
-	localValues := make([][]byte, 0)
-	// do local reads
-	dsTxn, err := w.stp.StartTxn(false)
-	if err != nil {
-		w.logger.Panicf("Can't start txn: %s", err.Error())
-	}
-	for idx := range txn.ReadSet {
-		key := txn.ReadSet[idx]
-		if w.cip.IsLocal(key) {
-			value := dsTxn.Get(key)
-			localKeys = append(localKeys, key)
-			localValues = append(localValues, value)
-		}
-	}
-	for idx := range txn.ReadWriteSet {
-		key := txn.ReadWriteSet[idx]
-		if w.cip.IsLocal(key) {
-			value := dsTxn.Get(key)
-			localKeys = append(localKeys, key)
-			localValues = append(localValues, value)
-		}
-	}
-	err = dsTxn.Rollback()
-	if err != nil {
-		w.logger.Panicf("Can't roll back txn: %s", err.Error())
-	}
+	localKeys, localValues := w.doLocalReads(txn)
 
 	if w.cip.AmIWriter(txn.WriterNodes) {
 		id, err := ulid.ParseIdFromProto(txn.Id)
@@ -164,6 +138,41 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction) {
 
 	// broadcast remote reads to all write peers
 	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues)
+}
+
+func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
+	localKeys := make([][]byte, 0)
+	localValues := make([][]byte, 0)
+	// do local reads
+	dsTxn, err := w.stp.StartTxn(false)
+	if err != nil {
+		w.logger.Panicf("Can't start txn: %s", err.Error())
+	}
+
+	for idx := range txn.ReadSet {
+		key := txn.ReadSet[idx]
+		if w.cip.IsLocal(key) {
+			value := dsTxn.Get(key)
+			localKeys = append(localKeys, key)
+			localValues = append(localValues, value)
+		}
+	}
+
+	for idx := range txn.ReadWriteSet {
+		key := txn.ReadWriteSet[idx]
+		if w.cip.IsLocal(key) {
+			value := dsTxn.Get(key)
+			localKeys = append(localKeys, key)
+			localValues = append(localValues, value)
+		}
+	}
+
+	err = dsTxn.Rollback()
+	if err != nil {
+		w.logger.Panicf("Can't roll back txn: %s", err.Error())
+	}
+
+	return localKeys, localValues
 }
 
 func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte) {

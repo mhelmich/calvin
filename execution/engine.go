@@ -127,17 +127,18 @@ func (w *worker) runWorker() {
 func (w *worker) processScheduledTxn(txn *pb.Transaction) {
 	localKeys, localValues := w.doLocalReads(txn)
 
-	if w.cip.AmIWriter(txn.WriterNodes) {
-		id, err := ulid.ParseIdFromProto(txn.Id)
-		if err != nil {
-			w.logger.Panicf("%s\n", err.Error())
-		}
+	txnID, err := ulid.ParseIdFromProto(txn.Id)
+	if err != nil {
+		w.logger.Panicf("%s\n", err.Error())
+	}
+	txnIDStr := txnID.String()
 
-		w.txnsToExecute.Store(id.String(), txn)
+	if w.cip.AmIWriter(txn.WriterNodes) {
+		w.txnsToExecute.Store(txnIDStr, txn)
 	}
 
 	// broadcast remote reads to all write peers
-	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues)
+	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues, txnIDStr)
 }
 
 func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
@@ -175,8 +176,8 @@ func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
 	return localKeys, localValues
 }
 
-func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte) {
-	defer util.TrackTime(w.logger, "broadcastLocalReadsToWriterNodes", time.Now())
+func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte, txnID string) {
+	defer util.TrackTime(w.logger, fmt.Sprintf("broadcastLocalReadsToWriterNodes [%s]", txnID), time.Now())
 	for idx := range txn.WriterNodes {
 		client, err := w.connCache.GetRemoteReadClient(txn.WriterNodes[idx])
 		if err != nil {
@@ -184,8 +185,7 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 		}
 
 		if log.GetLevel() == log.DebugLevel {
-			id, _ := ulid.ParseIdFromProto(txn.Id)
-			w.logger.Debugf("broadcasting remote reads for [%s] to %d", id.String(), txn.WriterNodes[idx])
+			w.logger.Debugf("broadcasting remote reads for [%s] to %d", txnID, txn.WriterNodes[idx])
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -203,23 +203,24 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
-	defer util.TrackTime(w.logger, fmt.Sprintf("runReadyTxn [%s]", execEnv.txnId.String()), time.Now())
-	t, ok := w.txnsToExecute.Load(execEnv.txnId.String())
+	txnID := execEnv.txnId.String()
+	defer util.TrackTime(w.logger, fmt.Sprintf("runReadyTxn [%s]", txnID), time.Now())
+	t, ok := w.txnsToExecute.Load(txnID)
 	if !ok {
-		w.logger.Panicf("Can't find txn [%s]\n", execEnv.txnId.String())
+		w.logger.Panicf("Can't find txn [%s]\n", txnID)
 	}
-	w.txnsToExecute.Delete(execEnv.txnId.String())
+	w.txnsToExecute.Delete(txnID)
 	txn := t.(*pb.Transaction)
 
-	err := w.runTxn(txn, execEnv)
+	err := w.runTxn(txn, execEnv, txnID)
 	if err != nil {
 		w.logger.Panicf("%s", err.Error())
 	}
 	w.doneTxnChan <- txn
 }
 
-func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
-	defer util.TrackTime(w.logger, fmt.Sprintf("runTxn [%s]", execEnv.txnId.String()), time.Now())
+func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment, txnID string) error {
+	defer util.TrackTime(w.logger, fmt.Sprintf("runTxn [%s]", txnID), time.Now())
 
 	dsTxn, err := w.stp.StartTxn(true)
 	if err != nil {

@@ -61,23 +61,28 @@ type boltDataStore struct {
 func (bds *boltDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
 	txn, err := bds.db.Begin(writable)
 	t := &boltDataStoreTxn{
-		txn: txn,
+		txn:    txn,
+		bucket: txn.Bucket([]byte(bucketName)),
 	}
 	return t, err
 }
 
+func (bds *boltDataStore) close() {
+	bds.db.Close()
+}
+
 type boltDataStoreTxn struct {
 	txn *bolt.Tx
+	// need to bucket in here to prevent race conditions
+	bucket *bolt.Bucket
 }
 
 func (t *boltDataStoreTxn) Get(key []byte) []byte {
-	b := t.txn.Bucket([]byte(bucketName))
-	return b.Get(key)
+	return t.bucket.Get(key)
 }
 
 func (t *boltDataStoreTxn) Set(key []byte, value []byte) error {
-	b := t.txn.Bucket([]byte(bucketName))
-	return b.Put(key, value)
+	return t.bucket.Put(key, value)
 }
 
 func (t *boltDataStoreTxn) Commit() error {
@@ -86,8 +91,4 @@ func (t *boltDataStoreTxn) Commit() error {
 
 func (t *boltDataStoreTxn) Rollback() error {
 	return t.txn.Rollback()
-}
-
-func (bds *boltDataStore) close() {
-	bds.db.Close()
 }

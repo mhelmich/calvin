@@ -203,7 +203,7 @@ func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]
 }
 
 func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
-	defer util.TrackTime(w.logger, "runReadyTxn", time.Now())
+	defer util.TrackTime(w.logger, fmt.Sprintf("runReadyTxn [%s]", execEnv.txnId.String()), time.Now())
 	t, ok := w.txnsToExecute.Load(execEnv.txnId.String())
 	if !ok {
 		w.logger.Panicf("Can't find txn [%s]\n", execEnv.txnId.String())
@@ -219,7 +219,7 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 }
 
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment) error {
-	defer util.TrackTime(w.logger, "runTxn", time.Now())
+	defer util.TrackTime(w.logger, fmt.Sprintf("runTxn [%s]", execEnv.txnId.String()), time.Now())
 
 	dsTxn, err := w.stp.StartTxn(true)
 	if err != nil {

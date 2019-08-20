@@ -36,8 +36,8 @@ const (
 	numWorkers = 2
 )
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTransactionProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
-	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2)
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTxnProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
+	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2+1)
 
 	rrs := newRemoteReadServer(readyToExecChan, logger)
 	pb.RegisterRemoteReadServer(srvr, rrs)
@@ -92,7 +92,7 @@ type worker struct {
 	scheduledTxnChan    <-chan *pb.Transaction
 	readyToExecChan     <-chan *txnExecEnvironment
 	doneTxnChan         chan<- *pb.Transaction
-	stp                 util.DataStoreTransactionProvider
+	stp                 util.DataStoreTxnProvider
 	connCache           util.ConnectionCache
 	cip                 util.ClusterInfoProvider
 	txnsToExecute       *sync.Map
@@ -113,6 +113,10 @@ func (w *worker) runWorker() {
 				w.luaState.Close()
 				return
 			}
+
+			if txn.IsLowIsolationRead {
+				w.processLowIsolationRead(txn)
+			}
 			w.processScheduledTxn(txn)
 
 		// wait for remote reads to be collected
@@ -122,6 +126,15 @@ func (w *worker) runWorker() {
 
 		}
 	}
+}
+
+func (w *worker) processLowIsolationRead(txn *pb.Transaction) {
+	localKeys, localValues := w.doLocalReads(txn)
+	txn.LowIsolationReadResponse = &pb.LowIsolationReadResponse{
+		Keys:   localKeys,
+		Values: localValues,
+	}
+	w.doneTxnChan <- txn
 }
 
 func (w *worker) processScheduledTxn(txn *pb.Transaction) {

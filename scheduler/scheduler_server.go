@@ -18,21 +18,44 @@ package scheduler
 
 import (
 	"context"
+	"sync"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 )
 
-func newServer(logger *log.Entry) *schedulerServer {
+func newServer(sequencerChan chan<- *pb.TransactionBatch, lowIsolationReads *sync.Map, logger *log.Entry) *schedulerServer {
 	return &schedulerServer{
-		logger: logger,
+		sequencerChan:     sequencerChan,
+		lowIsolationReads: lowIsolationReads,
+		logger:            logger,
 	}
 }
 
 type schedulerServer struct {
-	logger *log.Entry
+	sequencerChan     chan<- *pb.TransactionBatch
+	lowIsolationReads *sync.Map
+	logger            *log.Entry
 }
 
-func (ss *schedulerServer) LowIsolationRead(context.Context, *pb.LowIsolationReadRequest) (*pb.LowIsolationReadResponse, error) {
-	return nil, nil
+func (ss *schedulerServer) LowIsolationRead(ctx context.Context, req *pb.LowIsolationReadRequest) (*pb.LowIsolationReadResponse, error) {
+	id, _ := ulid.NewId()
+	txnID := id.String()
+
+	txn := &pb.Transaction{
+		Id:                 id.ToProto(),
+		ReadSet:            req.Keys,
+		IsLowIsolationRead: true,
+	}
+
+	c := make(chan *pb.LowIsolationReadResponse, 1)
+	ss.lowIsolationReads.Store(txnID, c)
+
+	ss.sequencerChan <- &pb.TransactionBatch{
+		Transactions: []*pb.Transaction{txn},
+	}
+
+	resp := <-c
+	return resp, nil
 }

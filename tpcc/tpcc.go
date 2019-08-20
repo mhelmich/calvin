@@ -23,6 +23,7 @@ import (
 	"github.com/mhelmich/calvin"
 	calvinpb "github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/tpcc/pb"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -41,12 +42,13 @@ func initDatastore() []*calvinpb.Transaction {
 		txn := calvin.NewTransaction()
 		txn.StoredProcedure = "__simple_setter__"
 
-		warehouseID := fmt.Sprintf("%x", i)
+		warehouseID := fmt.Sprintf("w%d", i)
 		warehouse := createWarehouse(warehouseID)
 		warehouses[warehouseID] = warehouse
 		warehouseIDs[i] = warehouseID
 		warehouseBites, _ := warehouse.Marshal()
 		txn.AddSimpleSetterArg([]byte(warehouseID), warehouseBites)
+		log.Infof("warehouseID: [%s]", warehouseID)
 
 		for j := 0; j < districtsPerWarehouse; j++ {
 			districtID := fmt.Sprintf("w%dd%d", i, j)

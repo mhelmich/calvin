@@ -33,9 +33,9 @@ func NewConnectionCache(cip ClusterInfoProvider) *connCache {
 }
 
 type ConnectionCache interface {
+	GetLowIsolationReadClient(nodeID uint64) (pb.LowIsolationReadClient, error)
 	GetRemoteReadClient(nodeID uint64) (pb.RemoteReadClient, error)
 	GetRaftTransportClient(nodeID uint64) (pb.RaftTransportClient, error)
-	GetSchedulerClient(nodeID uint64) (pb.SchedulerClient, error)
 	Close()
 }
 
@@ -62,13 +62,13 @@ func (cc *connCache) GetRaftTransportClient(nodeID uint64) (pb.RaftTransportClie
 	return pb.NewRaftTransportClient(conn), nil
 }
 
-func (cc *connCache) GetSchedulerClient(nodeID uint64) (pb.SchedulerClient, error) {
+func (cc *connCache) GetLowIsolationReadClient(nodeID uint64) (pb.LowIsolationReadClient, error) {
 	conn, err := cc.getConn(nodeID)
 	if err != nil {
 		return nil, err
 	}
 
-	return pb.NewSchedulerClient(conn), nil
+	return pb.NewLowIsolationReadClient(conn), nil
 }
 
 func (cc *connCache) getConn(nodeID uint64) (*grpc.ClientConn, error) {

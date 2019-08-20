@@ -52,16 +52,19 @@ message Transaction {
 
   Id128 Id = 1;
   // keys of the data objects that are being accessed
-  repeated bytes ReadSet = 3;
-  repeated bytes ReadWriteSet = 4;
+  repeated bytes ReadSet = 2;
+  repeated bytes ReadWriteSet = 3;
 
   // ids of the nodes that are being contacted
-  repeated uint64 ReaderNodes = 5;
-  repeated uint64 WriterNodes = 6;
+  repeated uint64 ReaderNodes = 4;
+  repeated uint64 WriterNodes = 5;
 
   // the stored procedure that's being invoked
-  string StoredProcedure = 7;
-  repeated bytes StoredProcedureArgs = 8;
+  string StoredProcedure = 6;
+  repeated bytes StoredProcedureArgs = 7;
+
+  bool IsLowIsolationRead = 8;
+  LowIsolationReadResponse LowIsolationReadResponse = 9;
 }
 
 message TransactionBatch {
@@ -77,13 +80,16 @@ message LowIsolationReadRequest {
 }
 
 message LowIsolationReadResponse {
+  option (gogoproto.equal) = true;
+  option (gogoproto.compare) = true;
+
   repeated bytes Keys = 1;
   repeated bytes Values = 2;
   uint64 Term = 3;
   uint64 Index = 4;
 }
 
-service Scheduler {
+service LowIsolationRead {
   rpc LowIsolationRead(LowIsolationReadRequest) returns (LowIsolationReadResponse) {}
 }
 

@@ -24,8 +24,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/mhelmich/calvin"
+	"github.com/mhelmich/calvin/tpcc/pb"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -54,6 +57,12 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 		Path("/initStore").
 		HandlerFunc(srvr.initStore).
 		Name("initStore")
+
+	router.
+		Methods("GET").
+		Path("/lowIsolationRead/{entityType}/{key}").
+		HandlerFunc(srvr.lowIsolationRead).
+		Name("lowIsolationRead")
 
 	// drag in pprof endpoints
 	router.
@@ -111,15 +120,46 @@ func (s *httpServer) initStore(w http.ResponseWriter, r *http.Request) {
 	txns := initDatastore()
 	s.logger.Infof("Done generating txns [%d]", len(txns))
 	a = append(a, fmt.Sprintf("Done generating txns [%d]", len(txns)))
+
 	size := uint64(0)
-	// s.c.SubmitTransaction(txns[0])
 	for idx := range txns {
 		size += uint64(txns[idx].Size())
 		s.c.SubmitTransaction(txns[idx])
 	}
 	s.logger.Infof("Done submitting txns [%d]", size)
 	a = append(a, fmt.Sprintf("Done generating txns [%d]", size))
+
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(a)
+}
+
+func (s *httpServer) lowIsolationRead(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	vType := vars["entityType"]
+	vKey := vars["key"]
+	key := []byte(vKey)
+	bites, err := s.c.LowIsolationRead(key)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	var buf proto.Message
+	switch vType {
+	case "warehouse":
+		buf = &pb.Warehouse{}
+	default:
+		s.logger.Errorf("Can't find entity [%s]", vType)
+		return
+	}
+
+	err = proto.Unmarshal(bites, buf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+
+	jpb := &jsonpb.Marshaler{Indent: "  "}
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	jpb.Marshal(w, buf)
 }

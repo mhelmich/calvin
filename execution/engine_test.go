@@ -40,7 +40,7 @@ func TestEngineBasic(t *testing.T) {
 	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
-	mockDS := new(mocks.DataStore)
+	mockDS := new(mocks.DataStoreTxnProvider)
 	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 	srvr := grpc.NewServer()
 
@@ -96,7 +96,7 @@ func TestWorkerBasic(t *testing.T) {
 	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
-	mockDS := new(mocks.DataStore)
+	mockDS := new(mocks.DataStoreTxnProvider)
 	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 
 	mockRRC := new(mocks.RemoteReadClient)
@@ -179,7 +179,7 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		func(b []byte) []byte { return []byte(string(b) + "_value") },
 	)
 	mockTXN.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
-	mockDS := new(mocks.DataStore)
+	mockDS := new(mocks.DataStoreTxnProvider)
 	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 
 	mockRRC := new(mocks.RemoteReadClient)

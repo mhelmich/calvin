@@ -16,7 +16,7 @@
 
 package util
 
-type DataStoreTransactionProvider interface {
+type DataStoreTxnProvider interface {
 	StartTxn(writable bool) (DataStoreTxn, error)
 }
 

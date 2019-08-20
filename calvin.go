@@ -17,6 +17,7 @@
 package calvin
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -126,6 +127,21 @@ func (c *Calvin) Stop() {
 
 func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {
 	c.seq.SubmitTransaction(txn)
+}
+
+func (c *Calvin) LowIsolationRead(key []byte) ([]byte, error) {
+	ownerID := c.cip.FindOwnerFor(key)
+	client, err := c.cc.GetLowIsolationReadClient(ownerID)
+	if err != nil {
+		c.logger.Errorf("%s", err.Error())
+	}
+
+	ctx := context.Background()
+	req := &pb.LowIsolationReadRequest{
+		Keys: [][]byte{key},
+	}
+	resp, err := client.LowIsolationRead(ctx, req)
+	return resp.Values[0], err
 }
 
 func readConfig(path string) config {

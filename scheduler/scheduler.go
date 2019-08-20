@@ -26,32 +26,36 @@ import (
 )
 
 type Scheduler struct {
-	sequencerChan <-chan *pb.TransactionBatch
-	readyTxnsChan chan<- *pb.Transaction
-	doneTxnChan   <-chan *pb.Transaction
-	lockMgr       *lockManager
-	logger        *log.Entry
+	sequencerChan     <-chan *pb.TransactionBatch
+	readyTxnsChan     chan<- *pb.Transaction
+	doneTxnChan       <-chan *pb.Transaction
+	lockMgr           *lockManager
+	lockMgrMutex      *sync.Mutex
+	lowIsolationReads *sync.Map
+	logger            *log.Entry
 }
 
-func NewScheduler(sequencerChan <-chan *pb.TransactionBatch, readyTxnsChan chan<- *pb.Transaction, doneTxnChan <-chan *pb.Transaction, srvr *grpc.Server, logger *log.Entry) *Scheduler {
+func NewScheduler(sequencerChan chan *pb.TransactionBatch, readyTxnsChan chan<- *pb.Transaction, doneTxnChan <-chan *pb.Transaction, srvr *grpc.Server, logger *log.Entry) *Scheduler {
+	lowIsolationReads := &sync.Map{}
 	s := &Scheduler{
-		sequencerChan: sequencerChan,
-		readyTxnsChan: readyTxnsChan,
-		doneTxnChan:   doneTxnChan,
-		lockMgr:       newLockManager(),
-		logger:        logger,
+		sequencerChan:     sequencerChan,
+		readyTxnsChan:     readyTxnsChan,
+		doneTxnChan:       doneTxnChan,
+		lockMgr:           newLockManager(),
+		lockMgrMutex:      &sync.Mutex{},
+		lowIsolationReads: lowIsolationReads,
+		logger:            logger,
 	}
 
-	ss := newServer(logger)
-	pb.RegisterSchedulerServer(srvr, ss)
+	ss := newServer(sequencerChan, lowIsolationReads, logger)
+	pb.RegisterLowIsolationReadServer(srvr, ss)
 
-	m := &sync.Mutex{}
-	go s.runLocker(m)
-	go s.runReleaser(m)
+	go s.runLocker()
+	go s.runReleaser()
 	return s
 }
 
-func (s *Scheduler) runLocker(m *sync.Mutex) {
+func (s *Scheduler) runLocker() {
 	for {
 		batch, ok := <-s.sequencerChan
 		if !ok {
@@ -69,9 +73,9 @@ func (s *Scheduler) runLocker(m *sync.Mutex) {
 				s.logger.Debugf("getting locks for txn [%s]", id.String())
 			}
 
-			m.Lock()
+			s.lockMgrMutex.Lock()
 			numLocksNotAcquired := s.lockMgr.lock(txn)
-			m.Unlock()
+			s.lockMgrMutex.Unlock()
 
 			if numLocksNotAcquired == 0 {
 				if log.GetLevel() == log.DebugLevel {
@@ -84,7 +88,7 @@ func (s *Scheduler) runLocker(m *sync.Mutex) {
 	}
 }
 
-func (s *Scheduler) runReleaser(m *sync.Mutex) {
+func (s *Scheduler) runReleaser() {
 	for {
 		txn, ok := <-s.doneTxnChan
 		if !ok {
@@ -97,9 +101,22 @@ func (s *Scheduler) runReleaser(m *sync.Mutex) {
 			s.logger.Debugf("txn [%s] became done\n", id.String())
 		}
 
-		m.Lock()
+		if txn.IsLowIsolationRead {
+			id, _ := ulid.ParseIdFromProto(txn.Id)
+			txnID := id.String()
+			v, ok := s.lowIsolationReads.Load(txnID)
+			if !ok {
+				s.logger.Panicf("can't find low isolation read channel for txn [%s]", txnID)
+			}
+			c := v.(chan *pb.LowIsolationReadResponse)
+			c <- txn.LowIsolationReadResponse
+			close(c)
+			s.lowIsolationReads.Delete(txnID)
+		}
+
+		s.lockMgrMutex.Lock()
 		newOwners := s.lockMgr.release(txn)
-		m.Unlock()
+		s.lockMgrMutex.Unlock()
 
 		for idx := range newOwners {
 			if log.GetLevel() == log.DebugLevel {

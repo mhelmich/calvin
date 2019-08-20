@@ -17,9 +17,11 @@
 package util
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/binary"
 	"net"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -108,4 +110,13 @@ func OutboundIP() net.IP {
 func TrackTime(logger *log.Entry, name string, start time.Time) {
 	elapsed := time.Since(start)
 	logger.Debugf("TrackTime: running %s took %s", name, elapsed)
+}
+
+func GetGID() uint64 {
+	b := make([]byte, 64)
+	b = b[:runtime.Stack(b, false)]
+	b = bytes.TrimPrefix(b, []byte("goroutine "))
+	b = b[:bytes.IndexByte(b, ' ')]
+	n, _ := strconv.ParseUint(string(b), 10, 64)
+	return n
 }

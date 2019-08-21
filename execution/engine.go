@@ -280,9 +280,9 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
 	args := w.convertBitesToArgs(txn.StoredProcedureArgs)
 
-	for idx := range args {
-		w.logger.Errorf("ARGS: %s %s", args[idx].Key, args[idx].Value)
-	}
+	// for idx := range args {
+	// 	w.logger.Errorf("ARGS: %s %s", args[idx].Key, args[idx].Value)
+	// }
 
 	w.luaState.SetGlobal("store", gluar.New(w.luaState, lds))
 	w.luaState.SetGlobal("KEYC", gluar.New(w.luaState, len(keys)))

@@ -63,6 +63,9 @@ message Transaction {
   string StoredProcedure = 6;
   repeated bytes StoredProcedureArgs = 7;
 
+  // only true when the transaction is a low isolation read
+  // in that case LowIsolationReadResponse is populated by the execution routines
+  // a nifty way to get this info from the execution back to the scheduler
   bool IsLowIsolationRead = 8;
   LowIsolationReadResponse LowIsolationReadResponse = 9;
 }

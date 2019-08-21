@@ -39,6 +39,16 @@ type schedulerServer struct {
 	logger            *log.Entry
 }
 
+// low isolation reads are tricky because they require communication between the execution package and the scheduler
+// and they overload the transaction object with a completely different shape and purpose
+// however the idea is:
+// * a request for a low isolation read comes in here
+// * a custom-build transaction batch is being put together
+// * a response channel is set up in the shared map
+// * the txn is sent to the sequencer channel and is treated like any other txn wrt locking and scheduling
+// * the execution package knows how to identify and treat a low isolation read txn (the main part is: do the read and attach a LowIsolationReadResponse)
+// * the txn is sent back via the done channel like any other txn
+// * the scheduler looks for the low iso flag, finds the response channel, sends on it, and is done
 func (ss *schedulerServer) LowIsolationRead(ctx context.Context, req *pb.LowIsolationReadRequest) (*pb.LowIsolationReadResponse, error) {
 	id, _ := ulid.NewId()
 	txnID := id.String()

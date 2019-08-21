@@ -133,9 +133,9 @@ func (w *worker) runWorker() {
 	}
 }
 
+// low iso reads only need to do local reads as it is assumed this node owns the key
 func (w *worker) processLowIsolationRead(txn *pb.Transaction) {
 	localKeys, localValues := w.doLocalReads(txn)
-	// w.logger.Debugf("LIR %s %s", string(localKeys[0]), string(localValues[0]))
 	txn.LowIsolationReadResponse = &pb.LowIsolationReadResponse{
 		Keys:   localKeys,
 		Values: localValues,

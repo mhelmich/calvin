@@ -117,8 +117,11 @@ type Transaction struct {
 	ReaderNodes []uint64 `protobuf:"varint,4,rep,packed,name=ReaderNodes,proto3" json:"ReaderNodes,omitempty"`
 	WriterNodes []uint64 `protobuf:"varint,5,rep,packed,name=WriterNodes,proto3" json:"WriterNodes,omitempty"`
 	// the stored procedure that's being invoked
-	StoredProcedure          string                    `protobuf:"bytes,6,opt,name=StoredProcedure,proto3" json:"StoredProcedure,omitempty"`
-	StoredProcedureArgs      [][]byte                  `protobuf:"bytes,7,rep,name=StoredProcedureArgs,proto3" json:"StoredProcedureArgs,omitempty"`
+	StoredProcedure     string   `protobuf:"bytes,6,opt,name=StoredProcedure,proto3" json:"StoredProcedure,omitempty"`
+	StoredProcedureArgs [][]byte `protobuf:"bytes,7,rep,name=StoredProcedureArgs,proto3" json:"StoredProcedureArgs,omitempty"`
+	// only true when the transaction is a low isolation read
+	// in that case LowIsolationReadResponse is populated by the execution routines
+	// a nifty way to get this info from the execution back to the scheduler
 	IsLowIsolationRead       bool                      `protobuf:"varint,8,opt,name=IsLowIsolationRead,proto3" json:"IsLowIsolationRead,omitempty"`
 	LowIsolationReadResponse *LowIsolationReadResponse `protobuf:"bytes,9,opt,name=LowIsolationReadResponse,proto3" json:"LowIsolationReadResponse,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{}                  `json:"-"`

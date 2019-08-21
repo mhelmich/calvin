@@ -101,6 +101,8 @@ func (s *Scheduler) runReleaser() {
 			s.logger.Debugf("txn [%s] became done\n", id.String())
 		}
 
+		// in addition to the regular stuff, low iso reads need
+		// the response out of the txn object to be sent on the response channel
 		if txn.IsLowIsolationRead {
 			id, _ := ulid.ParseIdFromProto(txn.Id)
 			txnID := id.String()

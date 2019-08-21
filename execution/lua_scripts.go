@@ -26,7 +26,7 @@ const simpleSetterProcName = "__simple_setter__"
 const simpleSetterProc = `
 	for i = 1, ARGC
 	do
-		--print(KEYV[i], ARGV[i])
-		store:Set(KEYV[i], ARGV[i])
+		--print(ARGV[i].Key, ARGV[i].Value)
+		store:Set(ARGV[i].Key, ARGV[i].Value)
 	end
 `

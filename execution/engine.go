@@ -130,6 +130,7 @@ func (w *worker) runWorker() {
 
 func (w *worker) processLowIsolationRead(txn *pb.Transaction) {
 	localKeys, localValues := w.doLocalReads(txn)
+	// w.logger.Debugf("LIR %s %s", string(localKeys[0]), string(localValues[0]))
 	txn.LowIsolationReadResponse = &pb.LowIsolationReadResponse{
 		Keys:   localKeys,
 		Values: localValues,
@@ -271,8 +272,8 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 		fction, _ = w.compiledStoredProcs.LoadOrStore(txn.StoredProcedure, fn)
 	}
 
-	args := w.convertByteArrayToStringArray(txn.StoredProcedureArgs)
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
+	args := w.convertBitesToArgs(txn.StoredProcedureArgs)
 
 	w.luaState.SetGlobal("store", gluar.New(w.luaState, lds))
 	w.luaState.SetGlobal("KEYC", gluar.New(w.luaState, len(keys)))
@@ -283,6 +284,27 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 	fn := fction.(*glua.LFunction)
 	w.luaState.Push(fn)
 	return w.luaState.PCall(0, glua.MultRet, nil)
+}
+
+func (w *worker) convertBitesToArgs(args [][]byte) []*ssa {
+	ssas := make([]*ssa, len(args))
+	for idx := range args {
+		arg := &pb.SimpleSetterArg{}
+		err := arg.Unmarshal(args[idx])
+		if err != nil {
+			w.logger.Panicf("%s", err.Error())
+		}
+		ssas[idx] = &ssa{
+			Key:   string(arg.Key),
+			Value: string(arg.Value),
+		}
+	}
+	return ssas
+}
+
+type ssa struct {
+	Key   string
+	Value string
 }
 
 func (w *worker) convertByteArrayToStringArray(args [][]byte) []string {

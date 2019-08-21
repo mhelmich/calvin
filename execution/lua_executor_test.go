@@ -188,6 +188,50 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	assert.Equal(t, "moep_arg", v)
 }
 
+func TestLuaExecutorProtoBufArg(t *testing.T) {
+	lua := glua.NewState()
+	defer lua.Close()
+
+	mockCIP := new(mocks.ClusterInfoProvider)
+	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+
+	store := newStoredProcDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
+
+	keys := []string{"narf"}
+	args := []*pb.SimpleSetterArg{
+		&pb.SimpleSetterArg{
+			Key:   []byte("narf"),
+			Value: []byte("narf_value"),
+		},
+	}
+	lua.SetGlobal("store", gluar.New(lua, store))
+	lua.SetGlobal("KEYC", gluar.New(lua, len(keys)))
+	lua.SetGlobal("KEYV", gluar.New(lua, keys))
+	lua.SetGlobal("ARGC", gluar.New(lua, len(args)))
+	lua.SetGlobal("ARGV", gluar.New(lua, args))
+
+	script := `
+    print("Hello from Lua !")
+    for i = 1, KEYC
+    do
+      print(KEYV[i])
+    end
+    for i = 1, ARGC
+    do
+      print(ARGV[i].Key, ARGV[i].Value)
+    end
+		for i = 1, ARGC
+    do
+      store:Set(ARGV[i].Key, ARGV[i].Value)
+			print(ARGV[i].Key, ARGV[i].Value)
+    end
+  `
+	err := lua.DoString(script)
+	assert.Nil(t, err)
+}
+
 func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	txn := &pb.Transaction{
 		StoredProcedure:     simpleSetterProcName,

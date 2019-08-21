@@ -232,6 +232,64 @@ func TestLuaExecutorProtoBufArg(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestLuaSubsequentExecutions(t *testing.T) {
+	ls := glua.NewState()
+	defer ls.Close()
+
+	script := `
+	for i = 1, ARGC
+	do
+		--print(ARGV[i].Key, ARGV[i].Value)
+		store:Set(ARGV[i].Key, ARGV[i].Value)
+	end
+	`
+
+	fn, err := ls.LoadString(script)
+	assert.Nil(t, err)
+
+	mockCIP := new(mocks.ClusterInfoProvider)
+	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	store := newStoredProcDataStore(&mapDataStoreTxn{
+		m: make(map[string]string),
+	}, [][]byte{[]byte("key1"), []byte("key2")}, [][]byte{nil, nil}, mockCIP)
+
+	args1 := []ssa{
+		ssa{
+			Key:   "key1",
+			Value: "value1",
+		},
+	}
+
+	args2 := []ssa{
+		ssa{
+			Key:   "key2",
+			Value: "value2",
+		},
+	}
+
+	ls.SetGlobal("store", gluar.New(ls, store))
+	ls.SetGlobal("ARGC", gluar.New(ls, len(args1)))
+	ls.SetGlobal("ARGV", gluar.New(ls, args1))
+
+	ls.Push(fn)
+	err = ls.PCall(0, glua.MultRet, nil)
+	assert.Nil(t, err)
+
+	v1 := store.Get("key1")
+
+	ls.SetGlobal("store", gluar.New(ls, store))
+	ls.SetGlobal("ARGC", gluar.New(ls, len(args2)))
+	ls.SetGlobal("ARGV", gluar.New(ls, args2))
+
+	ls.Push(fn)
+	err = ls.PCall(0, glua.MultRet, nil)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "value1", v1)
+	v2 := store.Get("key2")
+	assert.Equal(t, "value2", v2)
+}
+
 func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	txn := &pb.Transaction{
 		StoredProcedure:     simpleSetterProcName,

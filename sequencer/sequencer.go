@@ -179,3 +179,7 @@ func (s *Sequencer) StepStream(stream pb.RaftTransport_StepStreamServer) error {
 		}
 	}
 }
+
+func (s *Sequencer) LogToJson(out io.Writer, n int) error {
+	return s.rb.logToJson(out, n)
+}

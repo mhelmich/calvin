@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	netpprof "net/http/pprof"
-	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -48,12 +47,6 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 
 	router.
 		Methods("GET").
-		Path("/printInitStore").
-		HandlerFunc(srvr.printInitStore).
-		Name("initStore")
-
-	router.
-		Methods("GET").
 		Path("/initStore").
 		HandlerFunc(srvr.initStore).
 		Name("initStore")
@@ -63,6 +56,12 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 		Path("/lowIsolationRead/{entityType}/{key}").
 		HandlerFunc(srvr.lowIsolationRead).
 		Name("lowIsolationRead")
+
+	router.
+		Methods("GET").
+		Path("/calvinLogToJson").
+		HandlerFunc(srvr.calvinLogToJson).
+		Name("calvinLogToJson")
 
 	// drag in pprof endpoints
 	router.
@@ -98,21 +97,6 @@ type httpServer struct {
 	http.Server
 	c      *calvin.Calvin
 	logger *log.Entry
-}
-
-func (s *httpServer) printInitStore(w http.ResponseWriter, r *http.Request) {
-	txns := initDatastore()
-	a := make([]string, 0)
-	size := uint64(0)
-	for idx := range txns {
-		size += uint64(txns[idx].Size())
-		a = append(a, txns[idx].String())
-		a = append(a, fmt.Sprintf("txn size: %d", txns[idx].Size()))
-	}
-	a = append(a, "overall txn size: "+strconv.FormatUint(size, 10))
-	w.WriteHeader(http.StatusOK)
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(a)
 }
 
 func (s *httpServer) initStore(w http.ResponseWriter, r *http.Request) {
@@ -162,4 +146,10 @@ func (s *httpServer) lowIsolationRead(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	jpb.Marshal(w, buf)
+}
+
+func (s *httpServer) calvinLogToJson(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	s.c.LogToJson(w)
 }

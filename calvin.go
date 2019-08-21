@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -142,6 +143,10 @@ func (c *Calvin) LowIsolationRead(key []byte) ([]byte, error) {
 	}
 	resp, err := client.LowIsolationRead(ctx, req)
 	return resp.Values[0], err
+}
+
+func (c *Calvin) LogToJson(out io.Writer) error {
+	return c.seq.LogToJson(out, 10)
 }
 
 func readConfig(path string) config {

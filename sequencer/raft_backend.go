@@ -18,8 +18,10 @@ package sequencer
 
 import (
 	"context"
+	"io"
 	"time"
 
+	"github.com/golang/protobuf/jsonpb"
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
@@ -38,7 +40,7 @@ func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeC
 		ElectionTick:    7,
 		HeartbeatTick:   5,
 		Storage:         bs,
-		MaxSizePerMsg:   1024 * 1024, // 1 MB (!!!)
+		MaxSizePerMsg:   1024 * 1024 * 1024, // 1 GB (!!!)
 		MaxInflightMsgs: 256,
 		Logger:          logger,
 	}
@@ -262,4 +264,28 @@ func (rb *raftBackend) publishConfigChange(entry raftpb.Entry) {
 
 func (rb *raftBackend) step(ctx context.Context, msg raftpb.Message) error {
 	return rb.raftNode.Step(ctx, msg)
+}
+
+func (rb *raftBackend) logToJson(out io.Writer, n int) error {
+	hi, err := rb.store.LastIndex()
+	if err != nil {
+		return err
+	}
+
+	entries, err := rb.store.Entries(hi-uint64(n+1), hi+1, uint64(1024*1024*1024))
+	if err != nil {
+		return err
+	}
+
+	jpb := &jsonpb.Marshaler{Indent: "  "}
+	out.Write([]byte("{"))
+	for i := 0; i < len(entries); i++ {
+		jpb.Marshal(out, &entries[i])
+		if i < len(entries)-1 {
+			out.Write([]byte(",\n"))
+		}
+	}
+	out.Write([]byte("}"))
+
+	return nil
 }

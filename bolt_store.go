@@ -71,9 +71,11 @@ func (bds *boltDataStore) close() {
 	bds.db.Close()
 }
 
+// Later you might wanna look at this:
+// https://github.com/etcd-io/bbolt#batch-read-write-transactions
 type boltDataStoreTxn struct {
 	txn *bolt.Tx
-	// need to bucket in here to prevent race conditions
+	// need the bucket in here to prevent race conditions
 	bucket *bolt.Bucket
 }
 

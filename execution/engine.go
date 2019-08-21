@@ -44,21 +44,26 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 	txnsToExecute := &sync.Map{}
 	storedProcs := &sync.Map{}
 	initStoredProcedures(storedProcs)
-	compiledStoredProcs := &sync.Map{}
 	counter := uint64(0)
 
 	for i := 0; i < numWorkers; i++ {
 		w := worker{
-			scheduledTxnChan:    scheduledTxnChan,
-			readyToExecChan:     readyToExecChan,
-			doneTxnChan:         doneTxnChan,
-			stp:                 stp,
-			connCache:           connCache,
-			cip:                 cip,
-			txnsToExecute:       txnsToExecute,
-			storedProcs:         storedProcs,
-			luaState:            glua.NewState(),
-			compiledStoredProcs: compiledStoredProcs,
+			scheduledTxnChan: scheduledTxnChan,
+			readyToExecChan:  readyToExecChan,
+			doneTxnChan:      doneTxnChan,
+			stp:              stp,
+			connCache:        connCache,
+			cip:              cip,
+			txnsToExecute:    txnsToExecute,
+			storedProcs:      storedProcs,
+			luaState:         glua.NewState(),
+			// premature optimization came back to haunt me
+			// each worker needs its own compiledStoredProc map
+			// because compilation happens in relationship to a
+			// lua state
+			// and because all workers have their own lua state,
+			// all workers need their own procedure cache
+			compiledStoredProcs: &sync.Map{},
 			logger:              logger,
 			counter:             &counter,
 		}
@@ -255,23 +260,21 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment, txnID 
 	return dsTxn.Commit()
 }
 
-// FIXME:
-// premature optimization came back to haunt me
-// it seems resetting lua globals takes a moment async >_>
-// or the previous execution of a lua script holds on the globals
-// in any case, it seems destroying the lua state fixes this overriding problem
 func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *storedProcDataStore) error {
-	ls := glua.NewState()
-	defer ls.Close()
-
-	v, ok := w.storedProcs.Load(txn.StoredProcedure)
+	fction, ok := w.compiledStoredProcs.Load(txn.StoredProcedure)
 	if !ok {
-		return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
-	}
-	script := v.(string)
-	fn, err := ls.LoadString(script)
-	if err != nil {
-		w.logger.Panicf("%s\n", err.Error())
+		v, ok := w.storedProcs.Load(txn.StoredProcedure)
+		if !ok {
+			return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
+		}
+		script := v.(string)
+
+		fn, err := w.luaState.LoadString(script)
+		if err != nil {
+			w.logger.Panicf("%s\n", err.Error())
+		}
+
+		fction, _ = w.compiledStoredProcs.LoadOrStore(txn.StoredProcedure, fn)
 	}
 
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
@@ -281,58 +284,16 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 		w.logger.Errorf("ARGS: %s %s", args[idx].Key, args[idx].Value)
 	}
 
-	ls.SetGlobal("store", gluar.New(ls, lds))
-	ls.SetGlobal("KEYC", gluar.New(ls, len(keys)))
-	ls.SetGlobal("KEYV", gluar.New(ls, keys))
-	ls.SetGlobal("ARGC", gluar.New(ls, len(args)))
-	ls.SetGlobal("ARGV", gluar.New(ls, args))
+	w.luaState.SetGlobal("store", gluar.New(w.luaState, lds))
+	w.luaState.SetGlobal("KEYC", gluar.New(w.luaState, len(keys)))
+	w.luaState.SetGlobal("KEYV", gluar.New(w.luaState, keys))
+	w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, len(args)))
+	w.luaState.SetGlobal("ARGV", gluar.New(w.luaState, args))
 
-	ls.Push(fn)
-	return ls.PCall(0, glua.MultRet, nil)
+	fn := fction.(*glua.LFunction)
+	w.luaState.Push(fn)
+	return w.luaState.PCall(0, glua.MultRet, nil)
 }
-
-// SEE COMMENT ABOVE
-// func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *storedProcDataStore) error {
-// 	fction, ok := w.compiledStoredProcs.Load(txn.StoredProcedure)
-// 	if !ok {
-// 		v, ok := w.storedProcs.Load(txn.StoredProcedure)
-// 		if !ok {
-// 			return fmt.Errorf("Can't find proc [%s]", txn.StoredProcedure)
-// 		}
-// 		script := v.(string)
-//
-// 		fn, err := w.luaState.LoadString(script)
-// 		if err != nil {
-// 			w.logger.Panicf("%s\n", err.Error())
-// 		}
-//
-// 		fction, _ = w.compiledStoredProcs.LoadOrStore(txn.StoredProcedure, fn)
-// 	}
-//
-// 	keys := w.convertByteArrayToStringArray(execEnv.keys)
-// 	args := w.convertBitesToArgs(txn.StoredProcedureArgs)
-//
-// 	for idx := range args {
-// 		w.logger.Errorf("ARGS: %s %s", args[idx].Key, args[idx].Value)
-// 	}
-//
-// 	w.luaState.SetGlobal("store", gluar.New(w.luaState, lds))
-// 	w.luaState.SetGlobal("KEYC", gluar.New(w.luaState, len(keys)))
-// 	w.luaState.SetGlobal("KEYV", gluar.New(w.luaState, keys))
-// 	w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, len(args)))
-// 	w.luaState.SetGlobal("ARGV", gluar.New(w.luaState, args))
-//
-// 	fn := fction.(*glua.LFunction)
-// 	w.luaState.Push(fn)
-// 	return w.luaState.PCall(0, glua.MultRet, nil)
-//
-// 	// w.luaState.SetGlobal("store", glua.LNil)
-// 	// w.luaState.SetGlobal("KEYC", glua.LNil)
-// 	// w.luaState.SetGlobal("KEYV", glua.LNil)
-// 	// w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, 19))
-// 	// w.luaState.SetGlobal("ARGV", glua.LNil)
-// 	// return err
-// }
 
 func (w *worker) convertBitesToArgs(args [][]byte) []*ssa {
 	ssas := make([]*ssa, len(args))

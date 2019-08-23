@@ -234,18 +234,17 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	id, err := ulid.NewId()
 	assert.Nil(t, err)
 
-	// arg := &pb.SimpleSetterArg{
-	// 	Key:   []byte("narf"),
-	// 	Value: []byte("narf_value"),
-	// }
-	// argBites, err := arg.Marshal()
-	// assert.Nil(t, err)
+	arg := &pb.SimpleSetterArg{
+		Key:   []byte("narf"),
+		Value: []byte("narf_value"),
+	}
+	argBites, err := arg.Marshal()
+	assert.Nil(t, err)
 
 	txn := &pb.Transaction{
-		Id:              id.ToProto(),
-		StoredProcedure: simpleSetterProcName,
-		// StoredProcedureArgs: [][]byte{argBites},
-		StoredProcedureArgs: [][]byte{[]byte("narf")},
+		Id:                  id.ToProto(),
+		StoredProcedure:     simpleSetterProcName,
+		StoredProcedureArgs: [][]byte{argBites},
 	}
 	txnsToExecute.Store(id.String(), txn)
 

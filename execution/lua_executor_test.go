@@ -155,9 +155,24 @@ func TestLuaExecutorFancy(t *testing.T) {
 }
 
 func TestLuaExecutorScriptInvocation(t *testing.T) {
+	arg1 := &pb.SimpleSetterArg{
+		Key:   []byte("narf"),
+		Value: []byte("narf_value"),
+	}
+	argBites1, err1 := arg1.Marshal()
+	assert.Nil(t, err1)
+
+	arg2 := &pb.SimpleSetterArg{
+		Key:   []byte("moep"),
+		Value: []byte("moep_value"),
+	}
+	argBites2, err2 := arg2.Marshal()
+	assert.Nil(t, err2)
+
 	txn := &pb.Transaction{
-		StoredProcedure:     simpleSetterProcName,
-		StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
+		StoredProcedure: simpleSetterProcName,
+		// StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
+		StoredProcedureArgs: [][]byte{argBites1, argBites2},
 	}
 
 	execEnv := &txnExecEnvironment{
@@ -183,9 +198,9 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	w.runLua(txn, execEnv, lds)
 
 	v := lds.Get("narf")
-	assert.Equal(t, "narf_arg", v)
+	assert.Equal(t, "narf_value", v)
 	v = lds.Get("moep")
-	assert.Equal(t, "moep_arg", v)
+	assert.Equal(t, "moep_value", v)
 }
 
 func TestLuaExecutorProtoBufArg(t *testing.T) {

@@ -83,16 +83,28 @@ func TestCalvinTwoNodes(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		id, err := ulid.NewId()
 		assert.Nil(t, err)
+
+		arg1 := &pb.SimpleSetterArg{
+			Key:   []byte("narf"),
+			Value: []byte(fmt.Sprintf("narf_value_%d", i)),
+		}
+		argBites1, err1 := arg1.Marshal()
+		assert.Nil(t, err1)
+
+		arg2 := &pb.SimpleSetterArg{
+			Key:   []byte("mrmoep"),
+			Value: []byte(fmt.Sprintf("moep_value_%d", i)),
+		}
+		argBites2, err2 := arg2.Marshal()
+		assert.Nil(t, err2)
+
 		txn := &pb.Transaction{
 			Id:          id.ToProto(),
 			WriterNodes: []uint64{configBags[0].id, configBags[1].id},
 			// I tested that one key each lands on each node
-			ReadWriteSet:    [][]byte{[]byte("narf"), []byte("mrmoep")},
-			StoredProcedure: "__simple_setter__",
-			StoredProcedureArgs: [][]byte{
-				[]byte(fmt.Sprintf("narf_value_%d", i)),
-				[]byte(fmt.Sprintf("moep_value_%d", i)),
-			},
+			ReadWriteSet:        [][]byte{[]byte("narf"), []byte("mrmoep")},
+			StoredProcedure:     "__simple_setter__",
+			StoredProcedureArgs: [][]byte{argBites1, argBites2},
 		}
 
 		if i%2 == 0 {

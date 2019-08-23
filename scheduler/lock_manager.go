@@ -19,8 +19,10 @@ package scheduler
 import (
 	"bytes"
 	"hash/fnv"
+	"io"
 
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/ulid"
 )
 
 type lockMode int
@@ -41,6 +43,17 @@ type lockRequest struct {
 	txn  *pb.Transaction
 	mode lockMode
 	key  []byte
+}
+
+func (lr lockRequest) String() string {
+	id, _ := ulid.ParseIdFromProto(lr.txn.Id)
+	var lm string
+	if lr.mode == write {
+		lm = "write"
+	} else {
+		lm = "read"
+	}
+	return "[" + string(lr.key) + " - " + id.String() + " - " + lm + "]"
 }
 
 // The lockManager's lock map tracks all lock requests. For a
@@ -106,8 +119,8 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					break
 				}
 
-				// at this point I know there are a bunch of other requests sitting
-				// I'm a write so I will certainly not get the lock and have to wait
+				// at this point I know there are a bunch of other requests waiting in line
+				// I'm a write so I will certainly not get the lock and have to wait too
 				if mode == write {
 					numLocksNotAcquired++
 				}
@@ -232,4 +245,14 @@ func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequ
 	}
 
 	return append(lockRequests[:idx], lockRequests[idx+1:]...)
+}
+
+func (lm *lockManager) lockChainToAscii(out io.Writer) {
+	for _, lockRequests := range lm.lockMap {
+		for i := 0; i < len(lockRequests); i++ {
+			out.Write([]byte(lockRequests[i].String()))
+			out.Write([]byte(" -> "))
+		}
+		out.Write([]byte("\n"))
+	}
 }

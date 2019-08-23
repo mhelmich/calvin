@@ -149,6 +149,10 @@ func (c *Calvin) LogToJson(out io.Writer) error {
 	return c.seq.LogToJson(out, 10)
 }
 
+func (c *Calvin) LockChainToAscii(out io.Writer) {
+	c.sched.LockChainToAscii(out)
+}
+
 func readConfig(path string) config {
 	f, err := os.Open(path)
 	if err != nil {

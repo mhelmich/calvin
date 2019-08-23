@@ -178,7 +178,7 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	w := &worker{
 		storedProcs:         procs,
 		luaState:            glua.NewState(),
-		compiledStoredProcs: &sync.Map{},
+		compiledStoredProcs: make(map[string]*glua.LFunction),
 	}
 	w.runLua(txn, execEnv, lds)
 
@@ -314,7 +314,7 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	w := &worker{
 		storedProcs:         procs,
 		luaState:            glua.NewState(),
-		compiledStoredProcs: &sync.Map{},
+		compiledStoredProcs: make(map[string]*glua.LFunction),
 	}
 
 	f1, err := os.Create("./narf.pprof")

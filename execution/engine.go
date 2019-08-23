@@ -36,6 +36,19 @@ const (
 	numWorkers = 2
 )
 
+func newLuaState() *glua.LState {
+	opts := glua.Options{
+		SkipOpenLibs: true,
+	}
+	state := glua.NewState(opts)
+	glua.OpenPackage(state)
+	glua.OpenBase(state)
+	glua.OpenTable(state)
+	glua.OpenString(state)
+	glua.OpenMath(state)
+	return state
+}
+
 func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTxnProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2+1)
 
@@ -56,14 +69,15 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 			cip:              cip,
 			txnsToExecute:    txnsToExecute,
 			storedProcs:      storedProcs,
-			luaState:         glua.NewState(),
+			luaState:         newLuaState(),
 			// premature optimization came back to haunt me
 			// each worker needs its own compiledStoredProc map
 			// because compilation happens in relationship to a
 			// lua state
 			// and because all workers have their own lua state,
 			// all workers need their own procedure cache
-			compiledStoredProcs: &sync.Map{},
+			// compiledStoredProcs: &sync.Map{},
+			compiledStoredProcs: make(map[string]*glua.LFunction),
 			logger:              logger,
 			counter:             &counter,
 		}
@@ -102,13 +116,16 @@ type worker struct {
 	cip                 util.ClusterInfoProvider
 	txnsToExecute       *sync.Map
 	storedProcs         *sync.Map
-	compiledStoredProcs *sync.Map
+	compiledStoredProcs map[string]*glua.LFunction
 	luaState            *glua.LState
 	logger              *log.Entry
 	counter             *uint64
 }
 
 func (w *worker) runWorker() {
+	luaStateRenewTicker := time.NewTicker(time.Minute)
+	defer luaStateRenewTicker.Stop()
+
 	for {
 		select {
 		// wait for txns to be scheduled
@@ -129,8 +146,18 @@ func (w *worker) runWorker() {
 			w.runReadyTxn(execEnv)
 			atomic.AddUint64(w.counter, uint64(1))
 
+		case <-luaStateRenewTicker.C:
+			w.renewLuaState()
+
 		}
 	}
+}
+
+func (w *worker) renewLuaState() {
+	defer util.TrackTime(w.logger, "renewLuaState", time.Now())
+	w.luaState.Close()
+	w.luaState = newLuaState()
+	w.compiledStoredProcs = make(map[string]*glua.LFunction)
 }
 
 // low iso reads only need to do local reads as it is assumed this node owns the key
@@ -261,7 +288,7 @@ func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment, txnID 
 }
 
 func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *storedProcDataStore) error {
-	fction, ok := w.compiledStoredProcs.Load(txn.StoredProcedure)
+	fction, ok := w.compiledStoredProcs[txn.StoredProcedure]
 	if !ok {
 		v, ok := w.storedProcs.Load(txn.StoredProcedure)
 		if !ok {
@@ -274,7 +301,8 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 			w.logger.Panicf("%s\n", err.Error())
 		}
 
-		fction, _ = w.compiledStoredProcs.LoadOrStore(txn.StoredProcedure, fn)
+		w.compiledStoredProcs[txn.StoredProcedure] = fn
+		fction = fn
 	}
 
 	keys := w.convertByteArrayToStringArray(execEnv.keys)
@@ -290,8 +318,8 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 	w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, len(args)))
 	w.luaState.SetGlobal("ARGV", gluar.New(w.luaState, args))
 
-	fn := fction.(*glua.LFunction)
-	w.luaState.Push(fn)
+	// fn := fction.(*glua.LFunction)
+	w.luaState.Push(fction)
 	return w.luaState.PCall(0, glua.MultRet, nil)
 }
 

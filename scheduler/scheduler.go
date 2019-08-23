@@ -17,6 +17,7 @@
 package scheduler
 
 import (
+	"io"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -128,4 +129,10 @@ func (s *Scheduler) runReleaser() {
 			s.readyTxnsChan <- newOwners[idx].txn
 		}
 	}
+}
+
+func (s *Scheduler) LockChainToAscii(out io.Writer) {
+	s.lockMgrMutex.Lock()
+	s.lockMgr.lockChainToAscii(out)
+	s.lockMgrMutex.Unlock()
 }

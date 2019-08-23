@@ -141,7 +141,7 @@ func TestWorkerBasic(t *testing.T) {
 		cip:                 mockCIP,
 		txnsToExecute:       txnsToExecute,
 		storedProcs:         procs,
-		compiledStoredProcs: &sync.Map{},
+		compiledStoredProcs: make(map[string]*glua.LFunction),
 		luaState:            glua.NewState(),
 		logger:              logger,
 	}
@@ -225,7 +225,7 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		cip:                 mockCIP,
 		txnsToExecute:       txnsToExecute,
 		storedProcs:         procs,
-		compiledStoredProcs: &sync.Map{},
+		compiledStoredProcs: make(map[string]*glua.LFunction),
 		luaState:            glua.NewState(),
 		logger:              logger,
 	}

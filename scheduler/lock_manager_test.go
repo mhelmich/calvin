@@ -314,3 +314,112 @@ func TestLockManagerLockInheritanceWriteToReads(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(requests))
 }
+
+func TestLockManagerComplex(t *testing.T) {
+	lm := newLockManager()
+	key1 := []byte("key1")
+	key1Hash := lm.hash(key1)
+	key2 := []byte("key2")
+	key2Hash := lm.hash(key2)
+	key3 := []byte("key3")
+	key3Hash := lm.hash(key3)
+
+	txnID1, err := ulid.NewId()
+	// fmt.Printf("txnID1: %s\n", txnID1.String())
+	assert.Nil(t, err)
+	txn1 := &pb.Transaction{
+		Id:           txnID1.ToProto(),
+		ReadWriteSet: [][]byte{key1, key2, key3},
+	}
+
+	txnID2, err := ulid.NewId()
+	// fmt.Printf("txnID2: %s\n", txnID2.String())
+	assert.Nil(t, err)
+	txn2 := &pb.Transaction{
+		Id:           txnID2.ToProto(),
+		ReadWriteSet: [][]byte{key1, key2},
+	}
+
+	txnID3, err := ulid.NewId()
+	// fmt.Printf("txnID3: %s\n", txnID3.String())
+	assert.Nil(t, err)
+	txn3 := &pb.Transaction{
+		Id:           txnID3.ToProto(),
+		ReadWriteSet: [][]byte{key1, key3},
+	}
+
+	numLocksNotAcquired := lm.lock(txn1)
+	assert.Equal(t, 0, numLocksNotAcquired)
+
+	numLocksNotAcquired = lm.lock(txn2)
+	assert.Equal(t, 2, numLocksNotAcquired)
+
+	numLocksNotAcquired = lm.lock(txn3)
+	assert.Equal(t, 2, numLocksNotAcquired)
+
+	// lm.lockChainToAscii(os.Stdout)
+
+	assert.Equal(t, 3, len(lm.lockMap[key1Hash]))
+	lrs1 := lm.lockMap[key1Hash]
+	assert.True(t, txn1.Id.Equal(lrs1[0].txn.Id))
+	assert.True(t, txn2.Id.Equal(lrs1[1].txn.Id))
+	assert.True(t, txn3.Id.Equal(lrs1[2].txn.Id))
+
+	assert.Equal(t, 2, len(lm.lockMap[key2Hash]))
+	lrs2 := lm.lockMap[key2Hash]
+	assert.True(t, txn1.Id.Equal(lrs2[0].txn.Id))
+	assert.True(t, txn2.Id.Equal(lrs2[1].txn.Id))
+
+	assert.Equal(t, 2, len(lm.lockMap[key3Hash]))
+	lrs3 := lm.lockMap[key3Hash]
+	assert.True(t, txn1.Id.Equal(lrs3[0].txn.Id))
+	assert.True(t, txn3.Id.Equal(lrs3[1].txn.Id))
+
+	// release txn1
+
+	newOwners := lm.release(txn1)
+	assert.Equal(t, 1, len(newOwners))
+
+	// lm.lockChainToAscii(os.Stdout)
+
+	assert.Equal(t, 2, len(lm.lockMap[key1Hash]))
+	lrs1 = lm.lockMap[key1Hash]
+	assert.True(t, txn2.Id.Equal(lrs1[0].txn.Id))
+	assert.True(t, txn3.Id.Equal(lrs1[1].txn.Id))
+
+	assert.Equal(t, 1, len(lm.lockMap[key2Hash]))
+	lrs2 = lm.lockMap[key2Hash]
+	assert.True(t, txn2.Id.Equal(lrs2[0].txn.Id))
+
+	assert.Equal(t, 1, len(lm.lockMap[key3Hash]))
+	lrs3 = lm.lockMap[key3Hash]
+	assert.True(t, txn3.Id.Equal(lrs3[0].txn.Id))
+
+	// release txn2
+
+	newOwners = lm.release(txn2)
+	assert.Equal(t, 1, len(newOwners))
+
+	// lm.lockChainToAscii(os.Stdout)
+
+	assert.Equal(t, 1, len(lm.lockMap[key1Hash]))
+	lrs1 = lm.lockMap[key1Hash]
+	assert.True(t, txn3.Id.Equal(lrs1[0].txn.Id))
+
+	assert.Equal(t, 0, len(lm.lockMap[key2Hash]))
+
+	assert.Equal(t, 1, len(lm.lockMap[key3Hash]))
+	lrs3 = lm.lockMap[key3Hash]
+	assert.True(t, txn3.Id.Equal(lrs3[0].txn.Id))
+
+	// release txn2
+
+	newOwners = lm.release(txn3)
+	assert.Equal(t, 0, len(newOwners))
+
+	// lm.lockChainToAscii(os.Stdout)
+
+	assert.Equal(t, 0, len(lm.lockMap[key1Hash]))
+	assert.Equal(t, 0, len(lm.lockMap[key2Hash]))
+	assert.Equal(t, 0, len(lm.lockMap[key3Hash]))
+}

@@ -117,10 +117,10 @@ func (s *Scheduler) runReleaser() {
 
 		for idx := range newOwners {
 			if log.GetLevel() == log.DebugLevel {
-				id, _ := ulid.ParseIdFromProto(newOwners[idx].txn.Id)
+				id, _ := ulid.ParseIdFromProto(newOwners[idx].Id)
 				s.logger.Debugf("txn [%s] became ready\n", id.String())
 			}
-			s.readyTxnsChan <- newOwners[idx].txn
+			s.readyTxnsChan <- newOwners[idx]
 		}
 	}
 }

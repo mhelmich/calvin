@@ -18,8 +18,10 @@ package scheduler
 
 import (
 	"bytes"
+	"fmt"
 	"hash/fnv"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/mhelmich/calvin/pb"
@@ -37,6 +39,7 @@ func newLockManager() *lockManager {
 	return &lockManager{
 		lockMap:         make(map[uint64][]lockRequest),
 		txnsToNumWaiter: make(map[*pb.Transaction]int),
+		txnsToWaiters:   make(map[*pb.Transaction][]lockRequest),
 		lockMgrMutex:    &sync.Mutex{},
 	}
 }
@@ -68,6 +71,7 @@ func (lr lockRequest) String() string {
 type lockManager struct {
 	lockMap         map[uint64][]lockRequest
 	txnsToNumWaiter map[*pb.Transaction]int
+	txnsToWaiters   map[*pb.Transaction][]lockRequest
 	lockMgrMutex    *sync.Mutex
 }
 
@@ -82,8 +86,8 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 }
 
 func (lm *lockManager) lock(txn *pb.Transaction) int {
-	lm.lockMgrMutex.Lock()
 	numLocksNotAcquired := 0
+	lm.lockMgrMutex.Lock()
 	// lock the read-write set first
 	// lock locals
 	// double-check whether remote locks have been requested
@@ -95,6 +99,11 @@ func (lm *lockManager) lock(txn *pb.Transaction) int {
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
+
+	if numLocksNotAcquired > 0 {
+		lm.txnsToNumWaiter[txn] = numLocksNotAcquired
+	}
+
 	lm.lockMgrMutex.Unlock()
 	return numLocksNotAcquired
 }
@@ -153,6 +162,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 					}
 					lockRequests = append(lockRequests, req)
 					lm.lockMap[keyHash] = lockRequests
+					lm.addWaiter(txn, req)
 				}
 
 			} else {
@@ -165,6 +175,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 				}
 				lockRequests = append(lockRequests, req)
 				lm.lockMap[keyHash] = lockRequests
+				lm.addWaiter(txn, req)
 			}
 		}
 	}
@@ -172,17 +183,42 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 	return numLocksNotAcquired
 }
 
-func (lm *lockManager) release(txn *pb.Transaction) []lockRequest {
+func (lm *lockManager) addWaiter(txn *pb.Transaction, req lockRequest) {
+	lrs, ok := lm.txnsToWaiters[txn]
+	if ok {
+		lrs = append(lrs, req)
+	} else {
+		lrs = []lockRequest{req}
+	}
+	lm.txnsToWaiters[txn] = lrs
+}
+
+func (lm *lockManager) release(txn *pb.Transaction) []*pb.Transaction {
 	grantedRequests := make([]lockRequest, 0)
 	lm.lockMgrMutex.Lock()
+	delete(lm.txnsToWaiters, txn)
 	// find lock that was held and release it
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadWriteSet)...)
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadSet)...)
+
+	newOwners := make([]*pb.Transaction, 0)
+	for idx := range grantedRequests {
+		numLocksNotAcquired := lm.txnsToNumWaiter[grantedRequests[idx].txn]
+		if numLocksNotAcquired == 1 {
+			delete(lm.txnsToNumWaiter, grantedRequests[idx].txn)
+			newOwners = append(newOwners, grantedRequests[idx].txn)
+		} else {
+			numLocksNotAcquired--
+			lm.txnsToNumWaiter[grantedRequests[idx].txn] = numLocksNotAcquired
+		}
+	}
+
 	lm.lockMgrMutex.Unlock()
-	return grantedRequests
+	return newOwners
 }
 
 func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRequest {
+	newOwner := make([]lockRequest, 0)
 	for i := 0; i < len(set); i++ {
 		key := set[i]
 		keyHash := lm.hash(key)
@@ -220,8 +256,6 @@ func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRe
 		//  (c) The canceled request held a write lock preceded only by read
 		//      requests and followed by one or more read requests.
 		if deletedLockRequest != nil && j < len(lockRequests) {
-			newOwner := make([]lockRequest, 0)
-
 			if deletedLockRequest.mode == write || (deletedLockRequest.mode == write && lockRequests[j].mode == write) {
 				if lockRequests[j].mode == write { // (a)
 					newOwner = append(newOwner, lockRequests[j])
@@ -235,12 +269,10 @@ func (lm *lockManager) innerRelease(txnIDProto *pb.Id128, set [][]byte) []lockRe
 					newOwner = append(newOwner, lockRequests[j])
 				}
 			}
-
-			return newOwner
 		}
 	}
 
-	return nil
+	return newOwner
 }
 
 // order preserving remove idx ... is probably inefficient though :/
@@ -256,6 +288,8 @@ func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequ
 
 func (lm *lockManager) lockChainToAscii(out io.Writer) {
 	lm.lockMgrMutex.Lock()
+
+	out.Write([]byte("LOCK CHAIN:\n"))
 	for _, lockRequests := range lm.lockMap {
 		for i := 0; i < len(lockRequests); i++ {
 			out.Write([]byte(lockRequests[i].String()))
@@ -263,5 +297,23 @@ func (lm *lockManager) lockChainToAscii(out io.Writer) {
 		}
 		out.Write([]byte("\n"))
 	}
+
+	out.Write([]byte("TXN WAITS:\n"))
+	for k, v := range lm.txnsToNumWaiter {
+		id, _ := ulid.ParseIdFromProto(k.Id)
+		out.Write([]byte(fmt.Sprintf("[%s] -> [%d]\n", id, v)))
+	}
+
+	out.Write([]byte("TXN WAITERS:\n"))
+	for k, lrs := range lm.txnsToWaiters {
+		id, _ := ulid.ParseIdFromProto(k.Id)
+		var sb strings.Builder
+		for idx := range lrs {
+			sb.WriteString(lrs[idx].String())
+			sb.WriteString(" * ")
+		}
+		out.Write([]byte(fmt.Sprintf("[%s] -> [%s]\n", id, sb.String())))
+	}
+
 	lm.lockMgrMutex.Unlock()
 }

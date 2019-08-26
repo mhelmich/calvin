@@ -308,8 +308,8 @@ func TestLockManagerLockInheritanceWriteToReads(t *testing.T) {
 
 	newOwners := lm.release(txn1)
 	assert.Equal(t, 2, len(newOwners))
-	assert.True(t, txn2.Equal(newOwners[0].txn))
-	assert.True(t, txn3.Equal(newOwners[1].txn))
+	assert.True(t, txn2.Equal(newOwners[0]))
+	assert.True(t, txn3.Equal(newOwners[1]))
 	requests, ok = lm.lockMap[key1Hash]
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(requests))

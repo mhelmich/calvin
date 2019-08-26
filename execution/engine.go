@@ -318,7 +318,6 @@ func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *s
 	w.luaState.SetGlobal("ARGC", gluar.New(w.luaState, len(args)))
 	w.luaState.SetGlobal("ARGV", gluar.New(w.luaState, args))
 
-	// fn := fction.(*glua.LFunction)
 	w.luaState.Push(fction)
 	return w.luaState.PCall(0, glua.MultRet, nil)
 }

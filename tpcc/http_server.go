@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"net/http"
 	netpprof "net/http/pprof"
+	"strconv"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/gorilla/mux"
 	"github.com/mhelmich/calvin"
+	calvinpb "github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/tpcc/pb"
 	log "github.com/sirupsen/logrus"
 )
@@ -50,6 +52,12 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 		Path("/initStore").
 		HandlerFunc(srvr.initStore).
 		Name("initStore")
+
+	router.
+		Methods("GET").
+		Path("/createTxns/{nTxns}/{nEntities}").
+		HandlerFunc(srvr.createTxns).
+		Name("createTxns")
 
 	router.
 		Methods("GET").
@@ -107,18 +115,50 @@ type httpServer struct {
 
 func (s *httpServer) initStore(w http.ResponseWriter, r *http.Request) {
 	a := make([]string, 0)
-	txns := initDatastore()
-	s.logger.Infof("Done generating txns [%d]", len(txns))
-	a = append(a, fmt.Sprintf("Done generating txns [%d]", len(txns)))
+	txnChan := make(chan *calvinpb.Transaction, 100)
+	initDatastore(txnChan)
+	s.logger.Infof("Done generating txns [%d]", len(txnChan))
+	a = append(a, fmt.Sprintf("Done generating txns [%d]", len(txnChan)))
 
 	size := uint64(0)
-	for idx := range txns {
-		size += uint64(txns[idx].Size())
-		s.c.SubmitTransaction(txns[idx])
+	for {
+		txn, ok := <-txnChan
+		if !ok {
+			break
+		}
+		size += uint64(txn.Size())
+		s.c.SubmitTransaction(txn)
 	}
 	s.logger.Infof("Done submitting txns [%d]", size)
 	a = append(a, fmt.Sprintf("Done generating txns [%d]", size))
 
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(a)
+}
+
+func (s *httpServer) createTxns(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	nTxns, _ := strconv.Atoi(vars["nTxns"])
+	nEntities, _ := strconv.Atoi(vars["nEntities"])
+
+	txnChan := make(chan *calvinpb.Transaction)
+	makeNewTxns(nTxns, nEntities, txnChan)
+	size := uint64(0)
+	i := 0
+
+	for {
+		txn, ok := <-txnChan
+		if !ok {
+			break
+		}
+
+		i++
+		size += uint64(txn.Size())
+		s.c.SubmitTransaction(txn)
+	}
+
+	a := []string{fmt.Sprintf("Done generating txns [%d] txns for [%d] bytes", i, size)}
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(a)

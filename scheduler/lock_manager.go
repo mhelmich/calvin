@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"hash/fnv"
 	"io"
+	"sync"
 
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/ulid"
@@ -36,6 +37,7 @@ func newLockManager() *lockManager {
 	return &lockManager{
 		lockMap:         make(map[uint64][]lockRequest),
 		txnsToNumWaiter: make(map[*pb.Transaction]int),
+		lockMgrMutex:    &sync.Mutex{},
 	}
 }
 
@@ -66,6 +68,7 @@ func (lr lockRequest) String() string {
 type lockManager struct {
 	lockMap         map[uint64][]lockRequest
 	txnsToNumWaiter map[*pb.Transaction]int
+	lockMgrMutex    *sync.Mutex
 }
 
 func (lm *lockManager) hash(key []byte) uint64 {
@@ -79,6 +82,7 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 }
 
 func (lm *lockManager) lock(txn *pb.Transaction) int {
+	lm.lockMgrMutex.Lock()
 	numLocksNotAcquired := 0
 	// lock the read-write set first
 	// lock locals
@@ -91,6 +95,7 @@ func (lm *lockManager) lock(txn *pb.Transaction) int {
 	// double-check whether remote locks have been requested
 	// if not, request them
 	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
+	lm.lockMgrMutex.Unlock()
 	return numLocksNotAcquired
 }
 
@@ -169,9 +174,11 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 
 func (lm *lockManager) release(txn *pb.Transaction) []lockRequest {
 	grantedRequests := make([]lockRequest, 0)
+	lm.lockMgrMutex.Lock()
 	// find lock that was held and release it
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadWriteSet)...)
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadSet)...)
+	lm.lockMgrMutex.Unlock()
 	return grantedRequests
 }
 
@@ -248,6 +255,7 @@ func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequ
 }
 
 func (lm *lockManager) lockChainToAscii(out io.Writer) {
+	lm.lockMgrMutex.Lock()
 	for _, lockRequests := range lm.lockMap {
 		for i := 0; i < len(lockRequests); i++ {
 			out.Write([]byte(lockRequests[i].String()))
@@ -255,4 +263,5 @@ func (lm *lockManager) lockChainToAscii(out io.Writer) {
 		}
 		out.Write([]byte("\n"))
 	}
+	lm.lockMgrMutex.Unlock()
 }

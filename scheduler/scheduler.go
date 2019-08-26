@@ -31,7 +31,6 @@ type Scheduler struct {
 	readyTxnsChan     chan<- *pb.Transaction
 	doneTxnChan       <-chan *pb.Transaction
 	lockMgr           *lockManager
-	lockMgrMutex      *sync.Mutex
 	lowIsolationReads *sync.Map
 	logger            *log.Entry
 }
@@ -43,7 +42,6 @@ func NewScheduler(sequencerChan chan *pb.TransactionBatch, readyTxnsChan chan<- 
 		readyTxnsChan:     readyTxnsChan,
 		doneTxnChan:       doneTxnChan,
 		lockMgr:           newLockManager(),
-		lockMgrMutex:      &sync.Mutex{},
 		lowIsolationReads: lowIsolationReads,
 		logger:            logger,
 	}
@@ -74,9 +72,7 @@ func (s *Scheduler) runLocker() {
 				s.logger.Debugf("getting locks for txn [%s]", id.String())
 			}
 
-			s.lockMgrMutex.Lock()
 			numLocksNotAcquired := s.lockMgr.lock(txn)
-			s.lockMgrMutex.Unlock()
 
 			if numLocksNotAcquired == 0 {
 				if log.GetLevel() == log.DebugLevel {
@@ -117,9 +113,7 @@ func (s *Scheduler) runReleaser() {
 			s.lowIsolationReads.Delete(txnID)
 		}
 
-		s.lockMgrMutex.Lock()
 		newOwners := s.lockMgr.release(txn)
-		s.lockMgrMutex.Unlock()
 
 		for idx := range newOwners {
 			if log.GetLevel() == log.DebugLevel {
@@ -132,7 +126,5 @@ func (s *Scheduler) runReleaser() {
 }
 
 func (s *Scheduler) LockChainToAscii(out io.Writer) {
-	s.lockMgrMutex.Lock()
 	s.lockMgr.lockChainToAscii(out)
-	s.lockMgrMutex.Unlock()
 }

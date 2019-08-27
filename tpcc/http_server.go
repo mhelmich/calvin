@@ -77,6 +77,12 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 		HandlerFunc(srvr.calvinLockChainToAscii).
 		Name("calvinLockChainToAscii")
 
+	router.
+		Methods("GET").
+		Path("/calvinChannelsToAscii").
+		HandlerFunc(srvr.calvinChannelsToAscii).
+		Name("calvinChannelsToAscii")
+
 	// drag in pprof endpoints
 	router.
 		Path("/debug/pprof/cmdline").
@@ -204,4 +210,10 @@ func (s *httpServer) calvinLockChainToAscii(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
 	s.c.LockChainToAscii(w)
+}
+
+func (s *httpServer) calvinChannelsToAscii(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Header().Set("Content-Type", "application/json")
+	s.c.ChannelsToAscii(w)
 }

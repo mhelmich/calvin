@@ -37,6 +37,10 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	smallChannelSize = 3
+)
+
 type config struct {
 	RaftID    uint64
 	Hostname  string
@@ -64,7 +68,7 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 		logger.Panicf("%s\n", err.Error())
 	}
 
-	txnBatchChan := make(chan *pb.TransactionBatch)
+	txnBatchChan := make(chan *pb.TransactionBatch, smallChannelSize)
 	peers := []raft.Peer{raft.Peer{
 		ID:      cfg.RaftID,
 		Context: []byte(myAddress),
@@ -84,38 +88,44 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	}
 	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, logger)
 
-	readyTxns := make(chan *pb.Transaction)
-	doneTxnChan := make(chan *pb.Transaction)
-	sched := scheduler.NewScheduler(txnBatchChan, readyTxns, doneTxnChan, srvr, logger)
+	readyTxnChan := make(chan *pb.Transaction, smallChannelSize)
+	doneTxnChan := make(chan *pb.Transaction, smallChannelSize)
+	sched := scheduler.NewScheduler(txnBatchChan, readyTxnChan, doneTxnChan, srvr, logger)
 
 	dataStore := newBoltDataStore(storeDir, logger)
-	engine := execution.NewEngine(readyTxns, doneTxnChan, dataStore, srvr, cc, cip, logger)
+	engine := execution.NewEngine(readyTxnChan, doneTxnChan, dataStore, srvr, cc, cip, logger)
 
 	go srvr.Serve(lis)
 
 	return &Calvin{
-		cc:        cc,
-		cip:       cip,
-		seq:       seq,
-		sched:     sched,
-		engine:    engine,
-		grpcSrvr:  srvr,
-		dataStore: dataStore,
-		logger:    logger,
-		myRaftID:  cfg.RaftID,
+		cc:           cc,
+		cip:          cip,
+		seq:          seq,
+		sched:        sched,
+		engine:       engine,
+		grpcSrvr:     srvr,
+		dataStore:    dataStore,
+		txnBatchChan: txnBatchChan,
+		readyTxnChan: readyTxnChan,
+		doneTxnChan:  doneTxnChan,
+		logger:       logger,
+		myRaftID:     cfg.RaftID,
 	}
 }
 
 type Calvin struct {
-	cip       util.ClusterInfoProvider
-	cc        util.ConnectionCache
-	seq       *sequencer.Sequencer
-	sched     *scheduler.Scheduler
-	engine    *execution.Engine
-	grpcSrvr  *grpc.Server
-	dataStore *boltDataStore
-	logger    *log.Entry
-	myRaftID  uint64
+	cip          util.ClusterInfoProvider
+	cc           util.ConnectionCache
+	seq          *sequencer.Sequencer
+	sched        *scheduler.Scheduler
+	engine       *execution.Engine
+	grpcSrvr     *grpc.Server
+	dataStore    *boltDataStore
+	txnBatchChan chan *pb.TransactionBatch
+	readyTxnChan chan *pb.Transaction
+	doneTxnChan  chan *pb.Transaction
+	logger       *log.Entry
+	myRaftID     uint64
 }
 
 func (c *Calvin) Stop() {
@@ -151,6 +161,12 @@ func (c *Calvin) LogToJson(out io.Writer) error {
 
 func (c *Calvin) LockChainToAscii(out io.Writer) {
 	c.sched.LockChainToAscii(out)
+}
+
+func (c *Calvin) ChannelsToAscii(out io.Writer) {
+	out.Write([]byte(fmt.Sprintf("txnBatchChan %d/%d\n", len(c.txnBatchChan), cap(c.txnBatchChan))))
+	out.Write([]byte(fmt.Sprintf("readyTxnChan %d/%d\n", len(c.readyTxnChan), cap(c.readyTxnChan))))
+	out.Write([]byte(fmt.Sprintf("doneTxnChan %d/%d\n", len(c.doneTxnChan), cap(c.doneTxnChan))))
 }
 
 func readConfig(path string) config {

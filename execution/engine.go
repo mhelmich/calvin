@@ -137,6 +137,8 @@ func (w *worker) runWorker() {
 			}
 
 			if txn.IsLowIsolationRead {
+				// id, _ := ulid.ParseIdFromProto(txn.Id)
+				// w.logger.Debugf("txn [%s] is low iso read?!?!?", id.String())
 				w.processLowIsolationRead(txn)
 			}
 			w.processScheduledTxn(txn)

@@ -223,7 +223,7 @@ func (lm *lockManager) release(txn *pb.Transaction) []*pb.Transaction {
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadSet)...)
 
 	// id, _ := ulid.ParseIdFromProto(txn.Id)
-	// log.Debugf("releasing locks for [%s] [%d]", id.String(), len(grantedRequests))
+	// log.Debugf("released locks for [%s] [%d]", id.String(), len(grantedRequests))
 
 	newOwners := make([]*pb.Transaction, 0)
 	for idx := range grantedRequests {

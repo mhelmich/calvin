@@ -58,7 +58,9 @@ func (s *Scheduler) runLocker() {
 	for {
 		batch, ok := <-s.sequencerChan
 		if !ok {
-			close(s.readyTxnsChan)
+			c := s.readyTxnsChan
+			s.readyTxnsChan = nil
+			close(c)
 			s.logger.Warningf("Stopping lock locker")
 			return
 		} else if batch == nil {
@@ -120,7 +122,10 @@ func (s *Scheduler) runReleaser() {
 				id, _ := ulid.ParseIdFromProto(newOwners[idx].Id)
 				s.logger.Debugf("txn [%s] became ready\n", id.String())
 			}
-			s.readyTxnsChan <- newOwners[idx]
+
+			if s.readyTxnsChan != nil {
+				s.readyTxnsChan <- newOwners[idx]
+			}
 		}
 	}
 }

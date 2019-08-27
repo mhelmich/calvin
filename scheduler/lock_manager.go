@@ -86,23 +86,33 @@ func (lm *lockManager) isKeyLocal(key []byte) bool {
 }
 
 func (lm *lockManager) lock(txn *pb.Transaction) int {
-	numLocksNotAcquired := 0
 	lm.lockMgrMutex.Lock()
+
+	// _, ok := lm.txnsToNumWaiter[txn]
+	// if ok {
+	// 	log.Panicf("asking for locks again?")
+	// }
+
 	// lock the read-write set first
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
-	numLocksNotAcquired += lm.innerLock(txn, write, txn.ReadWriteSet)
+	numLocksNotAcquiredReadWrite := lm.innerLock(txn, write, txn.ReadWriteSet)
 
 	// lock read set
 	// lock locals
 	// double-check whether remote locks have been requested
 	// if not, request them
-	numLocksNotAcquired += lm.innerLock(txn, read, txn.ReadSet)
+	numLocksNotAcquiredRead := lm.innerLock(txn, read, txn.ReadSet)
 
+	numLocksNotAcquired := numLocksNotAcquiredRead + numLocksNotAcquiredReadWrite
 	if numLocksNotAcquired > 0 {
 		lm.txnsToNumWaiter[txn] = numLocksNotAcquired
 	}
+
+	// id, _ := ulid.ParseIdFromProto(txn.Id)
+	// log.Debugf("numLocksNotAcquired: [%s] w [%d] r [%d]", id.String(), numLocksNotAcquiredReadWrite, numLocksNotAcquiredRead)
+	// lm.lockChainToAsciiNoLock(os.Stdout)
 
 	lm.lockMgrMutex.Unlock()
 	return numLocksNotAcquired
@@ -116,55 +126,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 			keyHash := lm.hash(key)
 			lockRequests, ok := lm.lockMap[keyHash]
 			if ok {
-				j := 0
-				for ; !bytes.Equal(key, lockRequests[j].key) && j < len(lockRequests); j++ {
-					// hash collision
-				}
-
-				if j >= len(lockRequests) {
-					// hash collision
-					req := lockRequest{
-						mode: mode,
-						txn:  txn,
-						key:  key,
-					}
-					lockRequests = append(lockRequests, req)
-					lm.lockMap[keyHash] = lockRequests
-					break
-				}
-
-				// at this point I know there are a bunch of other requests waiting in line
-				// I'm a write so I will certainly not get the lock and have to wait too
-				if mode == write {
-					numLocksNotAcquired++
-				}
-
-				for ; j < len(lockRequests); j++ {
-
-					// if I'm a read and I find a write ahead of me,
-					// I know I won't be getting the lock
-					if mode == read && lockRequests[j].mode == write {
-						numLocksNotAcquired++
-					}
-
-					if txn.Id.Equal(lockRequests[j].txn.Id) {
-						// it seems I requested the lock already
-						break
-					}
-				}
-
-				if j >= len(lockRequests) {
-					// I didn't request this lock yet, so adding my request
-					req := lockRequest{
-						mode: mode,
-						txn:  txn,
-						key:  key,
-					}
-					lockRequests = append(lockRequests, req)
-					lm.lockMap[keyHash] = lockRequests
-					lm.addWaiter(txn, req)
-				}
-
+				numLocksNotAcquired += lm.innerInnerLock(txn, mode, key, lockRequests, keyHash)
 			} else {
 				// no entry in lock request map for this key
 				// I will be the first one ... yay
@@ -178,6 +140,65 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 				lm.addWaiter(txn, req)
 			}
 		}
+	}
+
+	return numLocksNotAcquired
+}
+
+func (lm *lockManager) innerInnerLock(txn *pb.Transaction, mode lockMode, key []byte, lockRequests []lockRequest, keyHash uint64) int {
+	j := 0
+	numLocksNotAcquired := 0
+	for ; !bytes.Equal(key, lockRequests[j].key) && j < len(lockRequests); j++ {
+		// hash collision
+	}
+
+	if j >= len(lockRequests) {
+		// hash collision
+		req := lockRequest{
+			mode: mode,
+			txn:  txn,
+			key:  key,
+		}
+		lockRequests = append(lockRequests, req)
+		lm.lockMap[keyHash] = lockRequests
+		return 0
+	}
+
+	// iterating over the correct key
+	for ; j < len(lockRequests); j++ {
+
+		if txn.Id.Equal(lockRequests[j].txn.Id) {
+			// it seems I requested the lock already
+			return 0
+		}
+
+		// at this point I know there are a bunch of other requests waiting in line
+		// I'm a write so I will certainly not get the lock and have to wait too
+		if mode == write {
+			// id, _ := ulid.ParseIdFromProto(txn.Id)
+			// log.Debugf("can't get key [%s] for [%s] [%d]", string(key), id.String(), mode)
+			numLocksNotAcquired = 1
+		}
+
+		// if I'm a read and I find a write ahead of me,
+		// I know I won't be getting the lock
+		if mode == read && lockRequests[j].mode == write {
+			numLocksNotAcquired = 1
+		}
+	}
+
+	if j >= len(lockRequests) {
+		// I didn't request this lock yet, so adding my request
+		req := lockRequest{
+			mode: mode,
+			txn:  txn,
+			key:  key,
+		}
+		lockRequests = append(lockRequests, req)
+		lm.lockMap[keyHash] = lockRequests
+		lm.addWaiter(txn, req)
+		// id, _ := ulid.ParseIdFromProto(txn.Id)
+		// log.Debugf("added lock request for [%s] as part of [%s]", string(key), id.String())
 	}
 
 	return numLocksNotAcquired
@@ -201,15 +222,21 @@ func (lm *lockManager) release(txn *pb.Transaction) []*pb.Transaction {
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadWriteSet)...)
 	grantedRequests = append(grantedRequests, lm.innerRelease(txn.Id, txn.ReadSet)...)
 
+	// id, _ := ulid.ParseIdFromProto(txn.Id)
+	// log.Debugf("releasing locks for [%s] [%d]", id.String(), len(grantedRequests))
+
 	newOwners := make([]*pb.Transaction, 0)
 	for idx := range grantedRequests {
 		numLocksNotAcquired := lm.txnsToNumWaiter[grantedRequests[idx].txn]
+		// id, _ := ulid.ParseIdFromProto(grantedRequests[idx].txn.Id)
 		if numLocksNotAcquired == 1 {
 			delete(lm.txnsToNumWaiter, grantedRequests[idx].txn)
 			newOwners = append(newOwners, grantedRequests[idx].txn)
+			// log.Debugf("newOwner: [%s]", id.String())
 		} else {
 			numLocksNotAcquired--
 			lm.txnsToNumWaiter[grantedRequests[idx].txn] = numLocksNotAcquired
+			// log.Debugf("release: [%s] [%d]", id.String(), numLocksNotAcquired)
 		}
 	}
 

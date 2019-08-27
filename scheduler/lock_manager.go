@@ -126,7 +126,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 			keyHash := lm.hash(key)
 			lockRequests, ok := lm.lockMap[keyHash]
 			if ok {
-				numLocksNotAcquired += lm.innerInnerLock(txn, mode, key, lockRequests, keyHash)
+				numLocksNotAcquired += lm.innerLockSingleKey(txn, mode, key, lockRequests, keyHash)
 			} else {
 				// no entry in lock request map for this key
 				// I will be the first one ... yay
@@ -145,7 +145,7 @@ func (lm *lockManager) innerLock(txn *pb.Transaction, mode lockMode, set [][]byt
 	return numLocksNotAcquired
 }
 
-func (lm *lockManager) innerInnerLock(txn *pb.Transaction, mode lockMode, key []byte, lockRequests []lockRequest, keyHash uint64) int {
+func (lm *lockManager) innerLockSingleKey(txn *pb.Transaction, mode lockMode, key []byte, lockRequests []lockRequest, keyHash uint64) int {
 	j := 0
 	numLocksNotAcquired := 0
 	for ; !bytes.Equal(key, lockRequests[j].key) && j < len(lockRequests); j++ {

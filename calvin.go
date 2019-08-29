@@ -38,7 +38,8 @@ import (
 )
 
 const (
-	smallChannelSize = 3
+	numWorkerThreads = 2
+	goodChannelSize  = numWorkerThreads*2 + 1
 )
 
 type config struct {
@@ -68,7 +69,7 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 		logger.Panicf("%s\n", err.Error())
 	}
 
-	txnBatchChan := make(chan *pb.TransactionBatch, smallChannelSize)
+	txnBatchChan := make(chan *pb.TransactionBatch, goodChannelSize)
 	peers := []raft.Peer{raft.Peer{
 		ID:      cfg.RaftID,
 		Context: []byte(myAddress),
@@ -88,12 +89,14 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	}
 	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, logger)
 
-	readyTxnChan := make(chan *pb.Transaction, smallChannelSize)
-	doneTxnChan := make(chan *pb.Transaction, smallChannelSize)
+	// releaser might be waiting to send on ready channel
+	readyTxnChan := make(chan *pb.Transaction, goodChannelSize)
+	// workers might be waiting to send on done channel
+	doneTxnChan := make(chan *pb.Transaction, goodChannelSize)
 	sched := scheduler.NewScheduler(txnBatchChan, readyTxnChan, doneTxnChan, srvr, logger)
 
 	dataStore := newBoltDataStore(storeDir, logger)
-	engine := execution.NewEngine(readyTxnChan, doneTxnChan, dataStore, srvr, cc, cip, logger)
+	engine := execution.NewEngine(readyTxnChan, doneTxnChan, dataStore, srvr, cc, cip, numWorkerThreads, logger)
 
 	go srvr.Serve(lis)
 

@@ -32,10 +32,6 @@ import (
 	gluar "layeh.com/gopher-luar"
 )
 
-const (
-	numWorkers = 2
-)
-
 func newLuaState() *glua.LState {
 	opts := glua.Options{
 		SkipOpenLibs: true,
@@ -49,7 +45,7 @@ func newLuaState() *glua.LState {
 	return state
 }
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTxnProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, logger *log.Entry) *Engine {
+func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTxnProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, numWorkers int, logger *log.Entry) *Engine {
 	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2+1)
 
 	rrs := newRemoteReadServer(readyToExecChan, logger)

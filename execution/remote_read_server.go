@@ -58,28 +58,35 @@ func (rrs *remoteReadServer) RemoteRead(ctx context.Context, req *pb.RemoteReadR
 	if err != nil {
 		return nil, err
 	}
+	txnIDStr := id.String()
 
-	defer util.TrackTime(rrs.logger, fmt.Sprintf("RemoteRead [%s]", id.String()), time.Now())
-	v, _ := rrs.txnIdToTxnExecEnv.LoadOrStore(id.String(), &txnExecEnvironment{
+	if len(req.Keys) <= 0 {
+		rrs.logger.Warningf("received empty remote read for [%s]", txnIDStr)
+		return &pb.RemoteReadResponse{}, nil
+	}
+
+	defer util.TrackTime(rrs.logger, fmt.Sprintf("RemoteRead [%s]", txnIDStr), time.Now())
+	v, _ := rrs.txnIdToTxnExecEnv.LoadOrStore(txnIDStr, &txnExecEnvironment{
 		mutex: &sync.Mutex{},
 		txnId: id,
 	})
 	execEnv := v.(*txnExecEnvironment)
 
 	execEnv.mutex.Lock()
-	defer execEnv.mutex.Unlock()
 	execEnv.keys = append(execEnv.keys, req.Keys...)
 	execEnv.values = append(execEnv.values, req.Values...)
 
 	if int(req.TotalNumLocks) == len(execEnv.keys) {
 		// this txn can run
-		rrs.logger.Debugf("txn [%s] can run", id.String())
-		rrs.txnIdToTxnExecEnv.Delete(id.String())
+		rrs.logger.Debugf("txn [%s] can run [%d] [%d] [%d]", txnIDStr, int(req.TotalNumLocks), len(execEnv.keys), len(req.Keys))
+		rrs.txnIdToTxnExecEnv.Delete(txnIDStr)
 		rrs.readyToExecChan <- execEnv
 	} else {
-		rrs.logger.Debugf("stashing remote reads for txn [%s]", id.String())
-		rrs.txnIdToTxnExecEnv.Store(id.String(), execEnv)
+		// stashing remote reads for a later delivery of remote reads
+		rrs.logger.Debugf("stashing remote reads for txn [%s]", txnIDStr)
+		rrs.txnIdToTxnExecEnv.Store(txnIDStr, execEnv)
 	}
 
+	execEnv.mutex.Unlock()
 	return &pb.RemoteReadResponse{}, nil
 }

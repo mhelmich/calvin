@@ -136,8 +136,9 @@ func (w *worker) runWorker() {
 				// id, _ := ulid.ParseIdFromProto(txn.Id)
 				// w.logger.Debugf("txn [%s] is low iso read?!?!?", id.String())
 				w.processLowIsolationRead(txn)
+			} else {
+				w.processScheduledTxn(txn)
 			}
-			w.processScheduledTxn(txn)
 
 		// wait for remote reads to be collected
 		case execEnv := <-w.readyToExecChan:
@@ -178,11 +179,20 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction) {
 	txnIDStr := txnID.String()
 
 	if w.cip.AmIWriter(txn.WriterNodes) {
+		// stash this anyways to dedup on receiving a ready txn
+		w.logger.Debugf("setting [%s] into txnsToExecute", txnIDStr)
 		w.txnsToExecute.Store(txnIDStr, txn)
+	} else {
+		// if I'm not a writer, I'm done now
+		// and can tell the lock manager to release the locks
+		w.logger.Debugf("releasing locks for RO txn [%s]", txnIDStr)
+		w.doneTxnChan <- txn
 	}
 
 	// broadcast remote reads to all write peers
-	w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues, txnIDStr)
+	if len(localKeys) > 0 {
+		w.broadcastLocalReadsToWriterNodes(txn, localKeys, localValues, txnIDStr)
+	}
 }
 
 func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
@@ -251,7 +261,7 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 	defer util.TrackTime(w.logger, fmt.Sprintf("runReadyTxn [%s]", txnID), time.Now())
 	t, ok := w.txnsToExecute.Load(txnID)
 	if !ok {
-		w.logger.Panicf("Can't find txn [%s]\n", txnID)
+		w.logger.Panicf("Can't find txn [%s]", txnID)
 	}
 	w.txnsToExecute.Delete(txnID)
 	txn := t.(*pb.Transaction)

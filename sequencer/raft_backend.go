@@ -272,10 +272,19 @@ func (rb *raftBackend) logToJson(out io.Writer, n int) error {
 		return err
 	}
 
-	entries, err := rb.store.Entries(hi-uint64(n+1), hi+1, uint64(1024*1024*1024))
+	var lo uint64
+	if uint64(n) > hi {
+		lo = uint64(0)
+	} else {
+		lo = hi - uint64(n+1)
+	}
+
+	entries, err := rb.store.Entries(lo, hi+1, uint64(1024*1024*1024))
 	if err != nil {
 		return err
 	}
+
+	rb.logger.Warningf("dumping %d raft log entries onto the wire [%d] [%d]", len(entries), hi, lo)
 
 	jpb := &jsonpb.Marshaler{Indent: "  "}
 	out.Write([]byte("{"))

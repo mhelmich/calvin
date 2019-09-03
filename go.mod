@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	github.com/coreos/bbolt v1.3.3
+	github.com/dgraph-io/badger v1.6.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.2
 	github.com/gorilla/mux v1.7.3

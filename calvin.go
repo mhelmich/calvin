@@ -95,7 +95,8 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 	doneTxnChan := make(chan *pb.Transaction, goodChannelSize)
 	sched := scheduler.NewScheduler(txnBatchChan, readyTxnChan, doneTxnChan, srvr, logger)
 
-	dataStore := newBoltDataStore(storeDir, logger)
+	// dataStore := newBoltDataStore(storeDir, logger)
+	dataStore := newBadgerDataStore(storeDir, logger)
 	engine := execution.NewEngine(readyTxnChan, doneTxnChan, dataStore, srvr, cc, cip, numWorkerThreads, logger)
 
 	go srvr.Serve(lis)
@@ -117,13 +118,14 @@ func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
 }
 
 type Calvin struct {
-	cip          util.ClusterInfoProvider
-	cc           util.ConnectionCache
-	seq          *sequencer.Sequencer
-	sched        *scheduler.Scheduler
-	engine       *execution.Engine
-	grpcSrvr     *grpc.Server
-	dataStore    *boltDataStore
+	cip      util.ClusterInfoProvider
+	cc       util.ConnectionCache
+	seq      *sequencer.Sequencer
+	sched    *scheduler.Scheduler
+	engine   *execution.Engine
+	grpcSrvr *grpc.Server
+	// dataStore    *boltDataStore
+	dataStore    *badgerDataStore
 	txnBatchChan chan *pb.TransactionBatch
 	readyTxnChan chan *pb.Transaction
 	doneTxnChan  chan *pb.Transaction

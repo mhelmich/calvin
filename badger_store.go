@@ -20,7 +20,7 @@
 package calvin
 
 import (
-	"time"
+	"io"
 
 	badger "github.com/dgraph-io/badger"
 	"github.com/mhelmich/calvin/util"
@@ -33,28 +33,25 @@ func newBadgerDataStore(dir string, logger *log.Entry) *badgerDataStore {
 		logger.Panicf("%s\n", err.Error())
 	}
 
-	ticker := time.NewTicker(5 * time.Minute)
-	go func() {
-		for {
-			<-ticker.C
-			err := db.RunValueLogGC(0.5)
-			if err != nil {
-				logger.Errorf("%s", err.Error())
-			}
-		}
-	}()
-
 	return &badgerDataStore{
-		db:       db,
-		gcTicker: ticker,
-		logger:   logger,
+		db:     db,
+		logger: logger,
 	}
 }
 
 type badgerDataStore struct {
-	db       *badger.DB
-	gcTicker *time.Ticker
-	logger   *log.Entry
+	db     *badger.DB
+	logger *log.Entry
+}
+
+func (bds *badgerDataStore) Snapshot(w io.Writer) error {
+	err := bds.db.RunValueLogGC(0.5)
+	if err != nil {
+		return err
+	}
+
+	_, err = bds.db.Backup(w, uint64(0))
+	return err
 }
 
 func (bds *badgerDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
@@ -65,8 +62,7 @@ func (bds *badgerDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
 	}, nil
 }
 
-func (bds *badgerDataStore) close() {
-	bds.gcTicker.Stop()
+func (bds *badgerDataStore) Close() {
 	bds.db.Close()
 }
 

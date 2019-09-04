@@ -17,6 +17,7 @@
 package calvin
 
 import (
+	"io"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
@@ -67,7 +68,12 @@ func (bds *boltDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
 	return t, err
 }
 
-func (bds *boltDataStore) close() {
+func (bds *boltDataStore) Snapshot(w io.Writer) error {
+	// TODO: implement this method
+	return nil
+}
+
+func (bds *boltDataStore) Close() {
 	bds.db.Close()
 }
 

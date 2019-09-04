@@ -138,7 +138,7 @@ func (c *Calvin) Stop() {
 	c.grpcSrvr.Stop()
 	c.seq.Stop()
 	time.Sleep(time.Second)
-	c.dataStore.close()
+	c.dataStore.Close()
 }
 
 func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {

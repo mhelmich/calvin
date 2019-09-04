@@ -16,8 +16,12 @@
 
 package util
 
+import "io"
+
 type DataStoreTxnProvider interface {
 	StartTxn(writable bool) (DataStoreTxn, error)
+	Snapshot(w io.Writer) error
+	Close()
 }
 
 type DataStoreTxn interface {

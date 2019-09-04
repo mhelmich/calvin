@@ -160,15 +160,15 @@ func (c *Calvin) LowIsolationRead(key []byte) ([]byte, error) {
 	return resp.Values[0], err
 }
 
-func (c *Calvin) LogToJson(out io.Writer) error {
-	return c.seq.LogToJson(out, 10)
+func (c *Calvin) LogToJSON(out io.Writer) error {
+	return c.seq.LogToJSON(out, 10)
 }
 
-func (c *Calvin) LockChainToAscii(out io.Writer) {
-	c.sched.LockChainToAscii(out)
+func (c *Calvin) LockChainToASCII(out io.Writer) {
+	c.sched.LockChainToASCII(out)
 }
 
-func (c *Calvin) ChannelsToAscii(out io.Writer) {
+func (c *Calvin) ChannelsToASCII(out io.Writer) {
 	out.Write([]byte(fmt.Sprintf("txnBatchChan %d/%d\n", len(c.txnBatchChan), cap(c.txnBatchChan))))
 	out.Write([]byte(fmt.Sprintf("readyTxnChan %d/%d\n", len(c.readyTxnChan), cap(c.readyTxnChan))))
 	out.Write([]byte(fmt.Sprintf("doneTxnChan %d/%d\n", len(c.doneTxnChan), cap(c.doneTxnChan))))

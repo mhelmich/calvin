@@ -313,7 +313,7 @@ func (lm *lockManager) removeIdx(lockRequests []lockRequest, idx int) []lockRequ
 	return append(lockRequests[:idx], lockRequests[idx+1:]...)
 }
 
-func (lm *lockManager) lockChainToAscii(out io.Writer) {
+func (lm *lockManager) lockChainToASCII(out io.Writer) {
 	lm.lockMgrMutex.Lock()
 
 	out.Write([]byte("LOCK CHAIN:\n"))

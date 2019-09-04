@@ -68,19 +68,19 @@ func startNewHttpServer(port int, c *calvin.Calvin, logger *log.Entry) *httpServ
 	router.
 		Methods("GET").
 		Path("/calvinLogToJson").
-		HandlerFunc(srvr.calvinLogToJson).
+		HandlerFunc(srvr.calvinLogToJSON).
 		Name("calvinLogToJson")
 
 	router.
 		Methods("GET").
 		Path("/calvinLockChainToAscii").
-		HandlerFunc(srvr.calvinLockChainToAscii).
+		HandlerFunc(srvr.calvinLockChainToASCII).
 		Name("calvinLockChainToAscii")
 
 	router.
 		Methods("GET").
 		Path("/calvinChannelsToAscii").
-		HandlerFunc(srvr.calvinChannelsToAscii).
+		HandlerFunc(srvr.calvinChannelsToASCII).
 		Name("calvinChannelsToAscii")
 
 	// drag in pprof endpoints
@@ -200,20 +200,20 @@ func (s *httpServer) lowIsolationRead(w http.ResponseWriter, r *http.Request) {
 	jpb.Marshal(w, buf)
 }
 
-func (s *httpServer) calvinLogToJson(w http.ResponseWriter, r *http.Request) {
+func (s *httpServer) calvinLogToJSON(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	s.c.LogToJson(w)
+	s.c.LogToJSON(w)
 }
 
-func (s *httpServer) calvinLockChainToAscii(w http.ResponseWriter, r *http.Request) {
+func (s *httpServer) calvinLockChainToASCII(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	s.c.LockChainToAscii(w)
+	s.c.LockChainToASCII(w)
 }
 
-func (s *httpServer) calvinChannelsToAscii(w http.ResponseWriter, r *http.Request) {
+func (s *httpServer) calvinChannelsToASCII(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Header().Set("Content-Type", "application/json")
-	s.c.ChannelsToAscii(w)
+	s.c.ChannelsToASCII(w)
 }

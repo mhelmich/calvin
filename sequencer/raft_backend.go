@@ -266,7 +266,7 @@ func (rb *raftBackend) step(ctx context.Context, msg raftpb.Message) error {
 	return rb.raftNode.Step(ctx, msg)
 }
 
-func (rb *raftBackend) logToJson(out io.Writer, n int) error {
+func (rb *raftBackend) logToJSON(out io.Writer, n int) error {
 	hi, err := rb.store.LastIndex()
 	if err != nil {
 		return err

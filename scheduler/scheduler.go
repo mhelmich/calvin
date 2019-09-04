@@ -130,6 +130,6 @@ func (s *Scheduler) runReleaser() {
 	}
 }
 
-func (s *Scheduler) LockChainToAscii(out io.Writer) {
-	s.lockMgr.lockChainToAscii(out)
+func (s *Scheduler) LockChainToASCII(out io.Writer) {
+	s.lockMgr.lockChainToASCII(out)
 }

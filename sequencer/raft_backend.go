@@ -19,6 +19,7 @@ package sequencer
 import (
 	"context"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -59,15 +60,17 @@ func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeC
 	}
 
 	rb := &raftBackend{
-		raftID:                raftID,
-		raftNode:              raftNode,
-		proposeChan:           proposeChan,
-		proposeConfChangeChan: proposeConfChangeChan,
-		txnBatchChan:          txnBatchChan,
-		connCache:             connCache,
-		store:                 bs,
-		confState:             &raftpb.ConfState{},
-		logger:                logger,
+		raftID:                  raftID,
+		raftNode:                raftNode,
+		proposeChan:             proposeChan,
+		proposeConfChangeChan:   proposeConfChangeChan,
+		txnBatchChan:            txnBatchChan,
+		connCache:               connCache,
+		store:                   bs,
+		confState:               &raftpb.ConfState{},
+		snapshotFrequency:       1000,
+		numberOfSnapshotsToKeep: 2,
+		logger:                  logger,
 	}
 
 	go rb.runRaftStateMachine()
@@ -76,17 +79,21 @@ func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeC
 }
 
 type raftBackend struct {
-	raftID                uint64
-	raftNode              raft.Node
-	proposeChan           <-chan []byte
-	proposeConfChangeChan <-chan raftpb.ConfChange
-	txnBatchChan          chan<- *pb.TransactionBatch
-	store                 *boltStorage
-	appliedIndex          uint64 // The last index that has been applied. It helps us figuring out which entries to publish.
-	confState             *raftpb.ConfState
-	connCache             util.ConnectionCache
-	startChan             chan interface{}
-	logger                *log.Entry
+	raftID                  uint64
+	raftNode                raft.Node
+	proposeChan             <-chan []byte
+	proposeConfChangeChan   <-chan raftpb.ConfChange
+	txnBatchChan            chan<- *pb.TransactionBatch
+	store                   *boltStorage
+	lastAppliedIndex        uint64 // The last index that has been applied. It helps us figuring out which entries to publish.
+	lastSnapshotIndex       uint64 // The index of the last snapshot
+	snapshotFrequency       uint64
+	numberOfSnapshotsToKeep int
+	confState               *raftpb.ConfState
+	connCache               util.ConnectionCache
+	startChan               chan interface{}
+	snapshotHandler         SnapshotHandler
+	logger                  *log.Entry
 }
 
 func (rb *raftBackend) serveProposalChannels() {
@@ -142,23 +149,38 @@ func (rb *raftBackend) runRaftStateMachine() {
 
 func (rb *raftBackend) processReady(rd raft.Ready) {
 	rb.store.saveEntriesAndState(rd.Entries, rd.HardState)
+	if !raft.IsEmptySnap(rd.Snapshot) {
+		rb.publishSnapshot(rd.Snapshot)
+	}
+
 	rb.broadcastMessages(rd.Messages)
 	rb.publishEntries(rb.entriesToApply(rd.CommittedEntries))
+	rb.maybeTriggerSnapshot()
 	rb.raftNode.Advance()
 }
 
 func (rb *raftBackend) broadcastMessages(msgs []raftpb.Message) {
+	// spawn a go routine for every recipient
+	// every go rountine is seeded with a particular recipientID
+	// and will only send messages for this recipient to this recipient
+	// this only works if msgs is not modified
+	wg := &sync.WaitGroup{}
 	peers := make(map[uint64]bool)
 	for idx := range msgs {
 		_, ok := peers[msgs[idx].To]
 		if !ok {
 			peers[msgs[idx].To] = true
-			go rb.innerBroadcastMessages(msgs[idx].To, idx, msgs)
+			wg.Add(1)
+			go rb.innerBroadcastMessages(msgs[idx].To, idx, msgs, wg)
 		}
 	}
+
+	wg.Wait()
 }
 
-func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, msgs []raftpb.Message) {
+func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, msgs []raftpb.Message, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	client, err := rb.connCache.GetRaftTransportClient(recipientID)
 	if err != nil {
 		rb.raftNode.ReportUnreachable(recipientID)
@@ -175,7 +197,7 @@ func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, 
 		return
 	}
 
-	numMsgsSent := 0
+	indexesToMsgsSent := []int{}
 
 	for idx := startIdx; idx < len(msgs); idx++ {
 		if msgs[idx].To == recipientID {
@@ -187,9 +209,13 @@ func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, 
 			err := stream.Send(req)
 			if err != nil {
 				rb.raftNode.ReportUnreachable(recipientID)
+				if msg.Type == raftpb.MsgSnap {
+					rb.raftNode.ReportSnapshot(recipientID, raft.SnapshotFailure)
+				}
 				rb.logger.Errorf("%s", err.Error())
 			}
-			numMsgsSent++
+
+			indexesToMsgsSent = append(indexesToMsgsSent, idx)
 		}
 	}
 
@@ -200,28 +226,38 @@ func (rb *raftBackend) innerBroadcastMessages(recipientID uint64, startIdx int, 
 		return
 	}
 
-	for idx := 0; idx < numMsgsSent; idx++ {
+	for idx := 0; idx < len(indexesToMsgsSent); idx++ {
 		resp, err := stream.Recv()
 		if err != nil {
 			rb.raftNode.ReportUnreachable(recipientID)
 			rb.logger.Errorf("%s", err.Error())
+			if msgs[indexesToMsgsSent[idx]].Type == raftpb.MsgSnap {
+				rb.raftNode.ReportSnapshot(recipientID, raft.SnapshotFailure)
+			}
 		} else if resp.Error != "" {
 			rb.raftNode.ReportUnreachable(recipientID)
 			rb.logger.Errorf("%s", resp.Error)
+			if msgs[indexesToMsgsSent[idx]].Type == raftpb.MsgSnap {
+				rb.raftNode.ReportSnapshot(recipientID, raft.SnapshotFailure)
+			}
+		}
+
+		if msgs[indexesToMsgsSent[idx]].Type == raftpb.MsgSnap {
+			rb.raftNode.ReportSnapshot(recipientID, raft.SnapshotFinish)
 		}
 	}
 }
 
 func (rb *raftBackend) entriesToApply(ents []raftpb.Entry) []raftpb.Entry {
 	if len(ents) == 0 {
-		return make([]raftpb.Entry, 0)
+		return []raftpb.Entry{}
 	}
 
 	firstIdx := ents[0].Index
-	if firstIdx > rb.appliedIndex+1 {
+	if firstIdx > rb.lastAppliedIndex+1 {
 		// if I'm getting invalid data, I'm shutting down
-		rb.logger.Panicf("First index of committed entry [%d] should <= progress.appliedIndex[%d] !", firstIdx, rb.appliedIndex)
-		return make([]raftpb.Entry, 0)
+		rb.logger.Panicf("First index of committed entry [%d] should <= progress.lastAppliedIndex[%d] !", firstIdx, rb.lastAppliedIndex)
+		return []raftpb.Entry{}
 	}
 
 	return ents
@@ -237,7 +273,7 @@ func (rb *raftBackend) publishEntries(ents []raftpb.Entry) {
 			rb.publishConfigChange(ents[idx])
 		}
 
-		rb.appliedIndex = ents[idx].Index
+		rb.lastAppliedIndex = ents[idx].Index
 	}
 }
 
@@ -260,6 +296,100 @@ func (rb *raftBackend) publishConfigChange(entry raftpb.Entry) {
 	cc.Unmarshal(entry.Data)
 	rb.confState = rb.raftNode.ApplyConfChange(cc)
 	rb.store.saveConfigState(*rb.confState)
+}
+
+func (rb *raftBackend) publishSnapshot(snap raftpb.Snapshot) {
+	if rb.snapshotHandler == nil {
+		return
+	}
+
+	// call consumer first
+	err := rb.snapshotHandler.Consume(snap.Data)
+	if err != nil {
+		rb.logger.Errorf("Snapshot handler consume failed: %s", err.Error())
+		return
+	}
+
+	// store the snapshot on disk
+	err = rb.store.saveSnap(snap)
+	if err != nil {
+		rb.logger.Errorf("Couldn't persist snapshot: %s", err.Error())
+		return
+	}
+
+	rb.confState = &snap.Metadata.ConfState
+	rb.lastSnapshotIndex = snap.Metadata.Index
+	rb.lastAppliedIndex = snap.Metadata.Index
+}
+
+func (rb *raftBackend) maybeTriggerSnapshot() {
+	if rb.lastAppliedIndex-rb.lastSnapshotIndex < rb.snapshotFrequency || rb.snapshotHandler == nil {
+		// we didn't collect enough entries yet to warrant a new snapshot
+		return
+	}
+
+	lastSnapshot, err := rb.store.Snapshot()
+	if err != nil {
+		rb.logger.Errorf("Couldn't get the last snapshot")
+		return
+	}
+
+	entriesSinceLastSnapshot, err := rb.store.Entries(lastSnapshot.Metadata.Index, rb.lastAppliedIndex+1, 1024*1024*1024)
+	if err != nil {
+		rb.logger.Errorf("Couldn't get entries since last snapshot")
+		return
+	}
+
+	// get snapshot from data structure
+	data, err := rb.snapshotHandler.Provide(lastSnapshot, entriesSinceLastSnapshot)
+	if err != nil {
+		rb.logger.Errorf("Snapshot handler provide failed: %s", err.Error())
+		return
+	}
+
+	// bake snapshot object by tossing all the metadata and byte arrays in there
+	snap, err := rb.bakeNewSnapshot(data)
+	if err != nil {
+		rb.logger.Errorf("Can't bake new snapshot: %s", err.Error())
+		return
+	}
+
+	// save the snapshot
+	err = rb.store.saveSnap(snap)
+	if err != nil {
+		rb.logger.Errorf("Can't save new snapshot: %s", err.Error())
+		return
+	}
+
+	// drop all log entries before the snapshot index
+	err = rb.store.dropLogEntriesBeforeIndex(snap.Metadata.Index)
+	if err != nil {
+		rb.logger.Errorf("Couldn't delete old log entries: %s", err.Error())
+	}
+
+	// drop old snapshots if applicable
+	err = rb.store.dropOldSnapshots(rb.numberOfSnapshotsToKeep)
+	if err != nil {
+		rb.logger.Errorf("Couldn't delete old snaphots: %s", err.Error())
+	}
+}
+
+func (rb *raftBackend) bakeNewSnapshot(data []byte) (raftpb.Snapshot, error) {
+	hardState, confState, err := rb.store.InitialState()
+	if err != nil {
+		return raftpb.Snapshot{}, err
+	}
+
+	metadata := raftpb.SnapshotMetadata{
+		ConfState: confState,
+		Index:     rb.lastAppliedIndex,
+		Term:      hardState.Term,
+	}
+
+	return raftpb.Snapshot{
+		Data:     data,
+		Metadata: metadata,
+	}, nil
 }
 
 func (rb *raftBackend) step(ctx context.Context, msg raftpb.Message) error {

@@ -50,9 +50,9 @@ type config struct {
 	Peers     []uint64
 }
 
-func NewCalvin(configPath string, clusterInfoPath string) *Calvin {
-	cfg := readConfig(configPath)
-	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
+func NewCalvin(opts *Options) *Calvin {
+	cfg := readConfig(opts.configPath)
+	cip := util.NewClusterInfoProvider(cfg.RaftID, opts.clusterInfoPath)
 	cc := util.NewConnectionCache(cip)
 
 	logger := log.WithFields(log.Fields{

@@ -35,7 +35,7 @@ func main() {
 
 	log.SetLevel(log.DebugLevel)
 
-	c := calvin.NewCalvin(cfgFile, "./cluster_info.toml")
+	c := calvin.NewCalvin(calvin.DefaultOptions(cfgFile, "./cluster_info.toml"))
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

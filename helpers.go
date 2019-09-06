@@ -18,6 +18,7 @@ package calvin
 
 import (
 	"github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/sequencer"
 	"github.com/mhelmich/calvin/ulid"
 	log "github.com/sirupsen/logrus"
 )
@@ -31,4 +32,22 @@ func NewTransaction() *pb.Transaction {
 	return &pb.Transaction{
 		Id: id.ToProto(),
 	}
+}
+
+func DefaultOptions(configPath string, clusterInfoPath string) *Options {
+	return &Options{
+		configPath:      configPath,
+		clusterInfoPath: clusterInfoPath,
+	}
+}
+
+type Options struct {
+	configPath      string
+	clusterInfoPath string
+	snapshotHandler sequencer.SnapshotHandler
+}
+
+func (o *Options) WithSnapshotHandler(snapshotHandler sequencer.SnapshotHandler) *Options {
+	o.snapshotHandler = snapshotHandler
+	return o
 }

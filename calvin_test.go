@@ -35,7 +35,7 @@ import (
 func TestCalvinStartStop(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 1)
 	configBag := configBags[0]
-	c := NewCalvin(configBag.path, ciPath)
+	c := NewCalvin(DefaultOptions(configBag.path, ciPath))
 	assert.NotNil(t, c.cc)
 	assert.NotNil(t, c.cip)
 	c.Stop()
@@ -47,7 +47,7 @@ func TestCalvinStartStop(t *testing.T) {
 func TestCalvinPushTxns(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 1)
 	configBag := configBags[0]
-	c := NewCalvin(configBag.path, ciPath)
+	c := NewCalvin(DefaultOptions(configBag.path, ciPath))
 
 	for i := 0; i < 10; i++ {
 		id, err := ulid.NewId()
@@ -69,8 +69,8 @@ func TestCalvinPushTxns(t *testing.T) {
 
 func TestCalvinTwoNodes(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 2)
-	c1 := NewCalvin(configBags[0].path, ciPath)
-	c2 := NewCalvin(configBags[1].path, ciPath)
+	c1 := NewCalvin(DefaultOptions(configBags[0].path, ciPath))
+	c2 := NewCalvin(DefaultOptions(configBags[1].path, ciPath))
 
 	// f1, err := os.Create("./cmd/calvin.pprof")
 	// assert.Nil(t, err)
@@ -137,8 +137,8 @@ func __TestCalvinThreeNodes(t *testing.T) {
 	os.RemoveAll("./cmd/calvin-2")
 	os.RemoveAll("./cmd/calvin-3")
 
-	c1 := NewCalvin("./cmd/config_1.toml", "./cmd/cluster_info.toml")
-	c2 := NewCalvin("./cmd/config_2.toml", "./cmd/cluster_info.toml")
+	c1 := NewCalvin(DefaultOptions("./cmd/config_1.toml", "./cmd/cluster_info.toml"))
+	c2 := NewCalvin(DefaultOptions("./cmd/config_2.toml", "./cmd/cluster_info.toml"))
 
 	for i := 0; i < 100; i++ {
 		id, err := ulid.NewId()
@@ -168,7 +168,7 @@ func __TestCalvinThreeNodes(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	c3 := NewCalvin("./cmd/config_3.toml", "./cmd/cluster_info.toml")
+	c3 := NewCalvin(DefaultOptions("./cmd/config_3.toml", "./cmd/cluster_info.toml"))
 
 	for i := 0; i < 100; i++ {
 		id, err := ulid.NewId()

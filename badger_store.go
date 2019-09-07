@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-// think about adding a flavor using badger
-// https://github.com/dgraph-io/badger
-
 package calvin
 
 import (

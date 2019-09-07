@@ -38,8 +38,8 @@ func newRaftBackend(raftID uint64, proposeChan <-chan []byte, proposeConfChangeC
 
 	c := &raft.Config{
 		ID:              raftID,
-		ElectionTick:    7,
-		HeartbeatTick:   5,
+		ElectionTick:    11,
+		HeartbeatTick:   3,
 		Storage:         bs,
 		MaxSizePerMsg:   1024 * 1024 * 1024, // 1 GB (!!!)
 		MaxInflightMsgs: 256,

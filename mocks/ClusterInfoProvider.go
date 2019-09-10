@@ -64,3 +64,19 @@ func (_m *ClusterInfoProvider) IsLocal(key []byte) bool {
 
 	return r0
 }
+
+// MyPartitions provides a mock function with given fields:
+func (_m *ClusterInfoProvider) MyPartitions() []int {
+	ret := _m.Called()
+
+	var r0 []int
+	if rf, ok := ret.Get(0).(func() []int); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]int)
+		}
+	}
+
+	return r0
+}

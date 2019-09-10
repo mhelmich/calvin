@@ -30,6 +30,7 @@ type ClusterInfoProvider interface {
 	IsLocal(key []byte) bool
 	AmIWriter(writerNodes []uint64) bool
 	GetAddressFor(nodeID uint64) string
+	MyPartitions() []int
 }
 
 func NewClusterInfoProvider(ownNodeID uint64, pathToClusterInfo string) ClusterInfoProvider {
@@ -61,6 +62,11 @@ func (c *cip) FindOwnerFor(key []byte) uint64 {
 	}
 
 	return uint64(0)
+}
+
+func (c *cip) MyPartitions() []int {
+	node := c.ci.Nodes[c.ownNodeID]
+	return node.Partitions
 }
 
 func (c *cip) IsLocal(key []byte) bool {

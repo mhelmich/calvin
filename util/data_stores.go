@@ -18,10 +18,15 @@ package util
 
 import "io"
 
+type PartitionProvider interface {
+	CreatePartition(partitionID int) (DataStoreTxnProvider, error)
+}
+
 type DataStoreTxnProvider interface {
 	StartTxn(writable bool) (DataStoreTxn, error)
 	Snapshot(w io.Writer) error
 	Close()
+	Delete()
 }
 
 type DataStoreTxn interface {

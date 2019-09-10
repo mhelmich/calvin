@@ -16,6 +16,11 @@ func (_m *DataStoreTxnProvider) Close() {
 	_m.Called()
 }
 
+// Delete provides a mock function with given fields:
+func (_m *DataStoreTxnProvider) Delete() {
+	_m.Called()
+}
+
 // Snapshot provides a mock function with given fields: w
 func (_m *DataStoreTxnProvider) Snapshot(w io.Writer) error {
 	ret := _m.Called(w)

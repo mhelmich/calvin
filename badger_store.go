@@ -17,12 +17,40 @@
 package calvin
 
 import (
+	"fmt"
 	"io"
+	"os"
 
 	badger "github.com/dgraph-io/badger"
 	"github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
+
+func newBadgerStoreProvider(baseDir string, logger *log.Entry) *badgerDataStoreProvider {
+	return &badgerDataStoreProvider{
+		baseDir: baseDir,
+		logger:  logger,
+	}
+}
+
+type badgerDataStoreProvider struct {
+	baseDir string
+	logger  *log.Entry
+}
+
+func (bdsp *badgerDataStoreProvider) CreatePartition(partitionID int) (util.DataStoreTxnProvider, error) {
+	dir := fmt.Sprintf("%s/partition-%d", bdsp.baseDir, partitionID)
+	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bdsp.logger))
+	if err != nil {
+		return nil, err
+	}
+
+	return &badgerDataStore{
+		db:     db,
+		dir:    dir,
+		logger: bdsp.logger,
+	}, nil
+}
 
 func newBadgerDataStore(dir string, logger *log.Entry) *badgerDataStore {
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(logger))
@@ -32,17 +60,19 @@ func newBadgerDataStore(dir string, logger *log.Entry) *badgerDataStore {
 
 	return &badgerDataStore{
 		db:     db,
+		dir:    dir,
 		logger: logger,
 	}
 }
 
 type badgerDataStore struct {
 	db     *badger.DB
+	dir    string
 	logger *log.Entry
 }
 
 func (bds *badgerDataStore) Snapshot(w io.Writer) error {
-	err := bds.db.RunValueLogGC(0.5)
+	err := bds.db.RunValueLogGC(0.8)
 	if err != nil {
 		return err
 	}
@@ -57,6 +87,13 @@ func (bds *badgerDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
 		txn:    txn,
 		logger: bds.logger,
 	}, nil
+}
+
+func (bds *badgerDataStore) Delete() {
+	defer func() {
+		bds.Close()
+		os.RemoveAll(bds.dir)
+	}()
 }
 
 func (bds *badgerDataStore) Close() {

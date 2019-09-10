@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	badger "github.com/dgraph-io/badger"
 	"github.com/mhelmich/calvin/util"
@@ -27,6 +28,9 @@ import (
 )
 
 func newBadgerStoreProvider(baseDir string, logger *log.Entry) *badgerDataStoreProvider {
+	if !strings.HasSuffix(baseDir, "/") {
+		baseDir = baseDir + "/"
+	}
 	return &badgerDataStoreProvider{
 		baseDir: baseDir,
 		logger:  logger,
@@ -39,7 +43,7 @@ type badgerDataStoreProvider struct {
 }
 
 func (bdsp *badgerDataStoreProvider) CreatePartition(partitionID int) (util.DataStoreTxnProvider, error) {
-	dir := fmt.Sprintf("%s/partition-%d", bdsp.baseDir, partitionID)
+	dir := fmt.Sprintf("%spartition-%d", bdsp.baseDir, partitionID)
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bdsp.logger))
 	if err != nil {
 		return nil, err

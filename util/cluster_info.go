@@ -26,11 +26,12 @@ import (
 )
 
 type ClusterInfoProvider interface {
-	FindOwnerFor(key []byte) uint64
+	FindOwnerForKey(key []byte) uint64
 	IsLocal(key []byte) bool
 	AmIWriter(writerNodes []uint64) bool
 	GetAddressFor(nodeID uint64) string
 	MyPartitions() []int
+	FindOwnerForPartition(partitionID int) uint64
 }
 
 func NewClusterInfoProvider(ownNodeID uint64, pathToClusterInfo string) ClusterInfoProvider {
@@ -51,7 +52,7 @@ func (c *cip) hashKeyToPartition(key []byte) int {
 	return int(hasher.Sum64() % uint64(c.ci.NumberPartitions))
 }
 
-func (c *cip) FindOwnerFor(key []byte) uint64 {
+func (c *cip) FindOwnerForKey(key []byte) uint64 {
 	partition := c.hashKeyToPartition(key)
 	for nodeID, node := range c.ci.Nodes {
 		for idx := range node.Partitions {
@@ -67,6 +68,18 @@ func (c *cip) FindOwnerFor(key []byte) uint64 {
 func (c *cip) MyPartitions() []int {
 	node := c.ci.Nodes[c.ownNodeID]
 	return node.Partitions
+}
+
+func (c *cip) FindOwnerForPartition(partitionID int) uint64 {
+	for idx := range c.ci.Nodes {
+		node := c.ci.Nodes[idx]
+		for _, nodesPartitionID := range node.Partitions {
+			if nodesPartitionID == partitionID {
+				return c.ci.Nodes[idx].ID
+			}
+		}
+	}
+	return uint64(0)
 }
 
 func (c *cip) IsLocal(key []byte) bool {

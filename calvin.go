@@ -146,7 +146,7 @@ func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {
 }
 
 func (c *Calvin) LowIsolationRead(key []byte) ([]byte, error) {
-	ownerID := c.cip.FindOwnerFor(key)
+	ownerID := c.cip.FindOwnerForKey(key)
 	client, err := c.cc.GetLowIsolationReadClient(ownerID)
 	if err != nil {
 		c.logger.Errorf("%s", err.Error())

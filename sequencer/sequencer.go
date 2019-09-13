@@ -121,13 +121,13 @@ func (s *Sequencer) findParticipants(txn *pb.Transaction) {
 	writerMap := make(map[uint64]bool)
 
 	for idx := range txn.ReadWriteSet {
-		ownerID := s.cip.FindOwnerFor(txn.ReadWriteSet[idx])
+		ownerID := s.cip.FindOwnerForKey(txn.ReadWriteSet[idx])
 		readerMap[ownerID] = true
 		writerMap[ownerID] = true
 	}
 
 	for idx := range txn.ReadSet {
-		ownerID := s.cip.FindOwnerFor(txn.ReadSet[idx])
+		ownerID := s.cip.FindOwnerForKey(txn.ReadSet[idx])
 		readerMap[ownerID] = true
 	}
 

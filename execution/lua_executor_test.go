@@ -17,8 +17,6 @@
 package execution
 
 import (
-	"os"
-	"runtime/pprof"
 	"sync"
 	"testing"
 
@@ -39,7 +37,7 @@ func TestLuaExecutorGluar(t *testing.T) {
 
 	lds := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
-	}, [][]byte{[]byte("hello")}, [][]byte{nil}, mockCIP)
+	}, [][]byte{[]byte("hello")}, [][]byte{[]byte("Lua")}, mockCIP)
 
 	lua.SetGlobal("store", gluar.New(lua, lds))
 	script := `
@@ -170,14 +168,13 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 	assert.Nil(t, err2)
 
 	txn := &pb.Transaction{
-		StoredProcedure: simpleSetterProcName,
-		// StoredProcedureArgs: [][]byte{[]byte("narf_arg"), []byte("moep_arg")},
+		StoredProcedure:     simpleSetterProcName,
 		StoredProcedureArgs: [][]byte{argBites1, argBites2},
 	}
 
 	execEnv := &txnExecEnvironment{
 		keys:   [][]byte{[]byte("narf"), []byte("moep")},
-		values: [][]byte{nil, nil},
+		values: [][]byte{[]byte("narf_value"), []byte("moep_value")},
 	}
 
 	mockCIP := new(mocks.ClusterInfoProvider)
@@ -266,7 +263,10 @@ func TestLuaSubsequentExecutions(t *testing.T) {
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
 	store := newStoredProcDataStore(&mapDataStoreTxn{
 		m: make(map[string]string),
-	}, [][]byte{[]byte("key1"), []byte("key2")}, [][]byte{nil, nil}, mockCIP)
+	},
+		[][]byte{[]byte("key1"), []byte("key2")},
+		[][]byte{[]byte("value1"), []byte("value2")},
+		mockCIP)
 
 	args1 := []ssa{
 		ssa{
@@ -332,14 +332,14 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 		compiledStoredProcs: make(map[string]*glua.LFunction),
 	}
 
-	f1, err := os.Create("./narf.pprof")
-	assert.Nil(b, err)
-	f2, err := os.Create("./narf.mprof")
-	assert.Nil(b, err)
-	pprof.StartCPUProfile(f1)
-	defer pprof.StopCPUProfile()
-	pprof.WriteHeapProfile(f2)
-	defer f2.Close()
+	// f1, err := os.Create("./narf.pprof")
+	// assert.Nil(b, err)
+	// f2, err := os.Create("./narf.mprof")
+	// assert.Nil(b, err)
+	// pprof.StartCPUProfile(f1)
+	// defer pprof.StopCPUProfile()
+	// pprof.WriteHeapProfile(f2)
+	// defer f2.Close()
 
 	for i := 0; i < b.N; i++ {
 		w.runLua(txn, execEnv, lds)

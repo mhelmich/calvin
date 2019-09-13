@@ -48,10 +48,7 @@ func (lds *storedProcDataStore) Get(key string) string {
 	if !ok {
 		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
 	} else if val == nil {
-		// TODO: make this
-		// return ""
-		// this might only be needed by tests that test lua execution
-		return string(lds.txn.Get([]byte(key)))
+		return ""
 	}
 	return string(val)
 }

@@ -132,6 +132,7 @@ func TestWorkerBasic(t *testing.T) {
 	procs := &sync.Map{}
 	initStoredProcedures(procs)
 
+	counter := uint64(0)
 	w := worker{
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
@@ -143,6 +144,7 @@ func TestWorkerBasic(t *testing.T) {
 		storedProcs:         procs,
 		compiledStoredProcs: make(map[string]*glua.LFunction),
 		luaState:            glua.NewState(),
+		counter:             &counter,
 		logger:              logger,
 	}
 	go w.runWorker()
@@ -216,6 +218,7 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	procs := &sync.Map{}
 	initStoredProcedures(procs)
 
+	counter := uint64(0)
 	w := worker{
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
@@ -227,6 +230,7 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		storedProcs:         procs,
 		compiledStoredProcs: make(map[string]*glua.LFunction),
 		luaState:            glua.NewState(),
+		counter:             &counter,
 		logger:              logger,
 	}
 	go w.runWorker()

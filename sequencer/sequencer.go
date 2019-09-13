@@ -48,7 +48,7 @@ func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers
 		logger:                logger,
 	}
 
-	pb.RegisterRaftTransportServer(srvr, s)
+	pb.RegisterRaftTransportServer(srvr, s.rb)
 	go s.serveTxnBatches()
 	return s
 }
@@ -156,28 +156,6 @@ func (s *Sequencer) SubmitTransaction(txn *pb.Transaction) {
 
 func (s *Sequencer) Stop() {
 	close(s.writerChan)
-}
-
-func (s *Sequencer) StepStream(stream pb.RaftTransport_StepStreamServer) error {
-	for {
-		req, err := stream.Recv()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-
-		resp := &pb.StepResponse{}
-		err = s.rb.step(stream.Context(), *req.Message)
-		if err != nil {
-			resp.Error = err.Error()
-		}
-
-		err = stream.Send(resp)
-		if err != nil {
-			s.logger.Errorf("%s", err.Error())
-		}
-	}
 }
 
 func (s *Sequencer) LogToJSON(out io.Writer, n int) error {

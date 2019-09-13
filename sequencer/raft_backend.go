@@ -392,6 +392,28 @@ func (rb *raftBackend) bakeNewSnapshot(data []byte) (raftpb.Snapshot, error) {
 	}, nil
 }
 
+func (rb *raftBackend) StepStream(stream pb.RaftTransport_StepStreamServer) error {
+	for {
+		req, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return err
+		}
+
+		resp := &pb.StepResponse{}
+		err = rb.step(stream.Context(), *req.Message)
+		if err != nil {
+			resp.Error = err.Error()
+		}
+
+		err = stream.Send(resp)
+		if err != nil {
+			rb.logger.Errorf("%s", err.Error())
+		}
+	}
+}
+
 func (rb *raftBackend) step(ctx context.Context, msg raftpb.Message) error {
 	return rb.raftNode.Step(ctx, msg)
 }

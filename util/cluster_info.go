@@ -73,9 +73,11 @@ func (c *cip) MyPartitions() []int {
 func (c *cip) FindOwnerForPartition(partitionID int) uint64 {
 	for idx := range c.ci.Nodes {
 		node := c.ci.Nodes[idx]
-		for _, nodesPartitionID := range node.Partitions {
-			if nodesPartitionID == partitionID {
-				return c.ci.Nodes[idx].ID
+		if node.IsLeader {
+			for _, nodesPartitionID := range node.Partitions {
+				if nodesPartitionID == partitionID {
+					return c.ci.Nodes[idx].ID
+				}
 			}
 		}
 	}

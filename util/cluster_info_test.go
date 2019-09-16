@@ -20,13 +20,29 @@ import (
 	"testing"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestIsLocal(t *testing.T) {
-	key1 := "narf"
+func TestClusterInfoIsLocal(t *testing.T) {
+	key1 := "narf0"
 	cip1 := NewClusterInfoProvider(uint64(1), "../tpcc/cluster_info.toml")
-	log.Infof("'%s' is local on 1: %t", key1, cip1.IsLocal([]byte(key1)))
+	isLocal := cip1.IsLocal([]byte(key1))
+	log.Infof("'%s' is local on 1: %t", key1, isLocal)
+	assert.True(t, isLocal)
 	key2 := "mrmoep"
 	cip2 := NewClusterInfoProvider(uint64(2), "../tpcc/cluster_info.toml")
-	log.Infof("'%s' is local on 2: %t", key2, cip2.IsLocal([]byte(key2)))
+	isLocal = cip2.IsLocal([]byte(key2))
+	log.Infof("'%s' is local on 2: %t", key2, isLocal)
+	assert.True(t, isLocal)
+}
+
+func TestClusterInfoFindOwnerAndLeaderForPartition(t *testing.T) {
+	cip1 := NewClusterInfoProvider(uint64(1), "../tpcc/cluster_info.toml")
+	cip3 := NewClusterInfoProvider(uint64(3), "../tpcc/cluster_info.toml")
+
+	nodeID := cip3.FindOwnerForPartition(1)
+	assert.Equal(t, uint64(2), nodeID)
+
+	nodeID = cip1.FindOwnerForPartition(1)
+	assert.Equal(t, uint64(2), nodeID)
 }

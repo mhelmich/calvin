@@ -122,6 +122,7 @@ type node struct {
 	Hostname   string
 	Port       int
 	Partitions []int
+	IsLeader   bool
 }
 
 func readClusterInfo(path string) clusterInfo {

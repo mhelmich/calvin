@@ -50,9 +50,10 @@ func (bdsp *badgerDataStoreProvider) CreatePartition(partitionID int) (util.Data
 	}
 
 	return &badgerDataStore{
-		db:     db,
-		dir:    dir,
-		logger: bdsp.logger,
+		db:          db,
+		dir:         dir,
+		partitionID: partitionID,
+		logger:      bdsp.logger,
 	}, nil
 }
 
@@ -63,25 +64,28 @@ func newBadgerDataStore(dir string, logger *log.Entry) *badgerDataStore {
 	}
 
 	return &badgerDataStore{
-		db:     db,
-		dir:    dir,
-		logger: logger,
+		db:          db,
+		dir:         dir,
+		partitionID: 0,
+		logger:      logger,
 	}
 }
 
 type badgerDataStore struct {
-	db     *badger.DB
-	dir    string
-	logger *log.Entry
+	db          *badger.DB
+	dir         string
+	partitionID int
+	logger      *log.Entry
 }
 
 func (bds *badgerDataStore) Snapshot(w io.Writer) error {
 	err := bds.db.RunValueLogGC(0.8)
-	if err != nil {
+	if err != nil && err != badger.ErrNoRewrite {
 		return err
 	}
 
-	_, err = bds.db.Backup(w, uint64(0))
+	ts, err := bds.db.Backup(w, 0)
+	bds.logger.Infof("Created backup on partition %d for ts %d", bds.partitionID, ts)
 	return err
 }
 

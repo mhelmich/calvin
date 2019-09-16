@@ -17,6 +17,7 @@
 package calvin
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"sync"
@@ -58,6 +59,53 @@ func TestBadgerStoreCreatingAndDeleting(t *testing.T) {
 		assert.Nil(t, err)
 		assert.False(t, exists)
 	}
+
+	err = os.RemoveAll(baseDir)
+	assert.Nil(t, err)
+}
+
+func TestBadgerStoreSnapshot(t *testing.T) {
+	baseDir := "./test-TestBadgerStoreSnapshot-" + util.Uint64ToString(util.RandomRaftId()) + "/"
+	err := os.MkdirAll(baseDir, os.ModePerm)
+	assert.Nil(t, err)
+	logger := log.WithFields(log.Fields{})
+	storeProvider := newBadgerStoreProvider(baseDir, logger)
+
+	store, err := storeProvider.CreatePartition(1)
+	assert.Nil(t, err)
+
+	count := 10
+	txn, err := store.StartTxn(true)
+	assert.Nil(t, err)
+	for i := 0; i < count; i++ {
+		txn.Set([]byte(fmt.Sprintf("key_%d", i)), []byte(fmt.Sprintf("value_%d", i)))
+	}
+
+	err = txn.Commit()
+	assert.Nil(t, err)
+
+	txn, err = store.StartTxn(false)
+	assert.Nil(t, err)
+	for i := 0; i < count; i++ {
+		bites := txn.Get([]byte(fmt.Sprintf("key_%d", i)))
+		assert.Equal(t, fmt.Sprintf("value_%d", i), string(bites))
+	}
+
+	err = txn.Commit()
+	assert.Nil(t, err)
+
+	buf := new(bytes.Buffer)
+	err = store.Snapshot(buf)
+	assert.Nil(t, err)
+	fmt.Printf("snapshot len: %d\n", buf.Len())
+	assert.True(t, buf.Len() > 0)
+
+	store.Delete()
+
+	time.Sleep(100 * time.Millisecond)
+	exists, err := pathExists(fmt.Sprintf("%spartition-%d", baseDir, 1))
+	assert.Nil(t, err)
+	assert.False(t, exists)
 
 	err = os.RemoveAll(baseDir)
 	assert.Nil(t, err)

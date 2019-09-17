@@ -46,28 +46,44 @@ message Id128 {
   uint64 Lower = 2;
 }
 
+enum MessageType {
+  TRANSACTION = 0;
+  LOW_ISO_READ = 1;
+}
+
+// EXPERIMENTAL
+message BaseMessage {
+ MessageType Type = 1;
+}
+
 message Transaction {
   option (gogoproto.equal) = true;
   option (gogoproto.compare) = true;
 
-  Id128 Id = 1;
+  MessageType Type = 1;
+  Id128 Id = 2;
   // keys of the data objects that are being accessed
-  repeated bytes ReadSet = 2;
-  repeated bytes ReadWriteSet = 3;
+  repeated bytes ReadSet = 3;
+  repeated bytes ReadWriteSet = 4;
 
   // ids of the nodes that are being contacted
-  repeated uint64 ReaderNodes = 4;
-  repeated uint64 WriterNodes = 5;
+  repeated uint64 ReaderNodes = 5;
+  repeated uint64 WriterNodes = 6;
 
   // the stored procedure that's being invoked
-  string StoredProcedure = 6;
-  repeated bytes StoredProcedureArgs = 7;
+  string StoredProcedure = 7;
+  repeated bytes StoredProcedureArgs = 8;
 
   // only true when the transaction is a low isolation read
   // in that case LowIsolationReadResponse is populated by the execution routines
   // a nifty way to get this info from the execution back to the scheduler
-  bool IsLowIsolationRead = 8;
-  LowIsolationReadResponse LowIsolationReadResponse = 9;
+  bool IsLowIsolationRead = 9;
+  LowIsolationReadResponse LowIsolationReadResponse = 10;
+}
+
+message LowIsoRead {
+  MessageType Type = 1;
+  LowIsolationReadResponse LowIsolationReadResponse = 2;
 }
 
 message TransactionBatch {

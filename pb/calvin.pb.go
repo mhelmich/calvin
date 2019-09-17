@@ -26,6 +26,31 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
+type MessageType int32
+
+const (
+	TRANSACTION  MessageType = 0
+	LOW_ISO_READ MessageType = 1
+)
+
+var MessageType_name = map[int32]string{
+	0: "TRANSACTION",
+	1: "LOW_ISO_READ",
+}
+
+var MessageType_value = map[string]int32{
+	"TRANSACTION":  0,
+	"LOW_ISO_READ": 1,
+}
+
+func (x MessageType) String() string {
+	return proto.EnumName(MessageType_name, int32(x))
+}
+
+func (MessageType) EnumDescriptor() ([]byte, []int) {
+	return fileDescriptor_afc31d04251e05fb, []int{0}
+}
+
 type SimpleSetterArg struct {
 	Key                  []byte   `protobuf:"bytes,1,opt,name=Key,proto3" json:"Key,omitempty"`
 	Value                []byte   `protobuf:"bytes,2,opt,name=Value,proto3" json:"Value,omitempty"`
@@ -108,22 +133,63 @@ func (m *Id128) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Id128 proto.InternalMessageInfo
 
+type BaseMessage struct {
+	Type                 MessageType `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.MessageType" json:"Type,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
+	XXX_unrecognized     []byte      `json:"-"`
+	XXX_sizecache        int32       `json:"-"`
+}
+
+func (m *BaseMessage) Reset()         { *m = BaseMessage{} }
+func (m *BaseMessage) String() string { return proto.CompactTextString(m) }
+func (*BaseMessage) ProtoMessage()    {}
+func (*BaseMessage) Descriptor() ([]byte, []int) {
+	return fileDescriptor_afc31d04251e05fb, []int{2}
+}
+func (m *BaseMessage) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *BaseMessage) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_BaseMessage.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *BaseMessage) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_BaseMessage.Merge(m, src)
+}
+func (m *BaseMessage) XXX_Size() int {
+	return m.Size()
+}
+func (m *BaseMessage) XXX_DiscardUnknown() {
+	xxx_messageInfo_BaseMessage.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_BaseMessage proto.InternalMessageInfo
+
 type Transaction struct {
-	Id *Id128 `protobuf:"bytes,1,opt,name=Id,proto3" json:"Id,omitempty"`
+	Type MessageType `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.MessageType" json:"Type,omitempty"`
+	Id   *Id128      `protobuf:"bytes,2,opt,name=Id,proto3" json:"Id,omitempty"`
 	// keys of the data objects that are being accessed
-	ReadSet      [][]byte `protobuf:"bytes,2,rep,name=ReadSet,proto3" json:"ReadSet,omitempty"`
-	ReadWriteSet [][]byte `protobuf:"bytes,3,rep,name=ReadWriteSet,proto3" json:"ReadWriteSet,omitempty"`
+	ReadSet      [][]byte `protobuf:"bytes,3,rep,name=ReadSet,proto3" json:"ReadSet,omitempty"`
+	ReadWriteSet [][]byte `protobuf:"bytes,4,rep,name=ReadWriteSet,proto3" json:"ReadWriteSet,omitempty"`
 	// ids of the nodes that are being contacted
-	ReaderNodes []uint64 `protobuf:"varint,4,rep,packed,name=ReaderNodes,proto3" json:"ReaderNodes,omitempty"`
-	WriterNodes []uint64 `protobuf:"varint,5,rep,packed,name=WriterNodes,proto3" json:"WriterNodes,omitempty"`
+	ReaderNodes []uint64 `protobuf:"varint,5,rep,packed,name=ReaderNodes,proto3" json:"ReaderNodes,omitempty"`
+	WriterNodes []uint64 `protobuf:"varint,6,rep,packed,name=WriterNodes,proto3" json:"WriterNodes,omitempty"`
 	// the stored procedure that's being invoked
-	StoredProcedure     string   `protobuf:"bytes,6,opt,name=StoredProcedure,proto3" json:"StoredProcedure,omitempty"`
-	StoredProcedureArgs [][]byte `protobuf:"bytes,7,rep,name=StoredProcedureArgs,proto3" json:"StoredProcedureArgs,omitempty"`
+	StoredProcedure     string   `protobuf:"bytes,7,opt,name=StoredProcedure,proto3" json:"StoredProcedure,omitempty"`
+	StoredProcedureArgs [][]byte `protobuf:"bytes,8,rep,name=StoredProcedureArgs,proto3" json:"StoredProcedureArgs,omitempty"`
 	// only true when the transaction is a low isolation read
 	// in that case LowIsolationReadResponse is populated by the execution routines
 	// a nifty way to get this info from the execution back to the scheduler
-	IsLowIsolationRead       bool                      `protobuf:"varint,8,opt,name=IsLowIsolationRead,proto3" json:"IsLowIsolationRead,omitempty"`
-	LowIsolationReadResponse *LowIsolationReadResponse `protobuf:"bytes,9,opt,name=LowIsolationReadResponse,proto3" json:"LowIsolationReadResponse,omitempty"`
+	IsLowIsolationRead       bool                      `protobuf:"varint,9,opt,name=IsLowIsolationRead,proto3" json:"IsLowIsolationRead,omitempty"`
+	LowIsolationReadResponse *LowIsolationReadResponse `protobuf:"bytes,10,opt,name=LowIsolationReadResponse,proto3" json:"LowIsolationReadResponse,omitempty"`
 	XXX_NoUnkeyedLiteral     struct{}                  `json:"-"`
 	XXX_unrecognized         []byte                    `json:"-"`
 	XXX_sizecache            int32                     `json:"-"`
@@ -133,7 +199,7 @@ func (m *Transaction) Reset()         { *m = Transaction{} }
 func (m *Transaction) String() string { return proto.CompactTextString(m) }
 func (*Transaction) ProtoMessage()    {}
 func (*Transaction) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{2}
+	return fileDescriptor_afc31d04251e05fb, []int{3}
 }
 func (m *Transaction) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -162,6 +228,47 @@ func (m *Transaction) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_Transaction proto.InternalMessageInfo
 
+type LowIsoRead struct {
+	Type                     MessageType               `protobuf:"varint,1,opt,name=Type,proto3,enum=pb.MessageType" json:"Type,omitempty"`
+	LowIsolationReadResponse *LowIsolationReadResponse `protobuf:"bytes,2,opt,name=LowIsolationReadResponse,proto3" json:"LowIsolationReadResponse,omitempty"`
+	XXX_NoUnkeyedLiteral     struct{}                  `json:"-"`
+	XXX_unrecognized         []byte                    `json:"-"`
+	XXX_sizecache            int32                     `json:"-"`
+}
+
+func (m *LowIsoRead) Reset()         { *m = LowIsoRead{} }
+func (m *LowIsoRead) String() string { return proto.CompactTextString(m) }
+func (*LowIsoRead) ProtoMessage()    {}
+func (*LowIsoRead) Descriptor() ([]byte, []int) {
+	return fileDescriptor_afc31d04251e05fb, []int{4}
+}
+func (m *LowIsoRead) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *LowIsoRead) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_LowIsoRead.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *LowIsoRead) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_LowIsoRead.Merge(m, src)
+}
+func (m *LowIsoRead) XXX_Size() int {
+	return m.Size()
+}
+func (m *LowIsoRead) XXX_DiscardUnknown() {
+	xxx_messageInfo_LowIsoRead.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_LowIsoRead proto.InternalMessageInfo
+
 type TransactionBatch struct {
 	Transactions         []*Transaction `protobuf:"bytes,1,rep,name=transactions,proto3" json:"transactions,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
@@ -173,7 +280,7 @@ func (m *TransactionBatch) Reset()         { *m = TransactionBatch{} }
 func (m *TransactionBatch) String() string { return proto.CompactTextString(m) }
 func (*TransactionBatch) ProtoMessage()    {}
 func (*TransactionBatch) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{3}
+	return fileDescriptor_afc31d04251e05fb, []int{5}
 }
 func (m *TransactionBatch) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -213,7 +320,7 @@ func (m *LowIsolationReadRequest) Reset()         { *m = LowIsolationReadRequest
 func (m *LowIsolationReadRequest) String() string { return proto.CompactTextString(m) }
 func (*LowIsolationReadRequest) ProtoMessage()    {}
 func (*LowIsolationReadRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{4}
+	return fileDescriptor_afc31d04251e05fb, []int{6}
 }
 func (m *LowIsolationReadRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -256,7 +363,7 @@ func (m *LowIsolationReadResponse) Reset()         { *m = LowIsolationReadRespon
 func (m *LowIsolationReadResponse) String() string { return proto.CompactTextString(m) }
 func (*LowIsolationReadResponse) ProtoMessage()    {}
 func (*LowIsolationReadResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{5}
+	return fileDescriptor_afc31d04251e05fb, []int{7}
 }
 func (m *LowIsolationReadResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -299,7 +406,7 @@ func (m *RemoteReadRequest) Reset()         { *m = RemoteReadRequest{} }
 func (m *RemoteReadRequest) String() string { return proto.CompactTextString(m) }
 func (*RemoteReadRequest) ProtoMessage()    {}
 func (*RemoteReadRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{6}
+	return fileDescriptor_afc31d04251e05fb, []int{8}
 }
 func (m *RemoteReadRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -339,7 +446,7 @@ func (m *RemoteReadResponse) Reset()         { *m = RemoteReadResponse{} }
 func (m *RemoteReadResponse) String() string { return proto.CompactTextString(m) }
 func (*RemoteReadResponse) ProtoMessage()    {}
 func (*RemoteReadResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{7}
+	return fileDescriptor_afc31d04251e05fb, []int{9}
 }
 func (m *RemoteReadResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -380,7 +487,7 @@ func (m *RaftPeer) Reset()         { *m = RaftPeer{} }
 func (m *RaftPeer) String() string { return proto.CompactTextString(m) }
 func (*RaftPeer) ProtoMessage()    {}
 func (*RaftPeer) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{8}
+	return fileDescriptor_afc31d04251e05fb, []int{10}
 }
 func (m *RaftPeer) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -421,7 +528,7 @@ func (m *StepRequest) Reset()         { *m = StepRequest{} }
 func (m *StepRequest) String() string { return proto.CompactTextString(m) }
 func (*StepRequest) ProtoMessage()    {}
 func (*StepRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{9}
+	return fileDescriptor_afc31d04251e05fb, []int{11}
 }
 func (m *StepRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -461,7 +568,7 @@ func (m *StepResponse) Reset()         { *m = StepResponse{} }
 func (m *StepResponse) String() string { return proto.CompactTextString(m) }
 func (*StepResponse) ProtoMessage()    {}
 func (*StepResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{10}
+	return fileDescriptor_afc31d04251e05fb, []int{12}
 }
 func (m *StepResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -500,7 +607,7 @@ func (m *SubmitTransactionRequest) Reset()         { *m = SubmitTransactionReque
 func (m *SubmitTransactionRequest) String() string { return proto.CompactTextString(m) }
 func (*SubmitTransactionRequest) ProtoMessage()    {}
 func (*SubmitTransactionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{11}
+	return fileDescriptor_afc31d04251e05fb, []int{13}
 }
 func (m *SubmitTransactionRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -539,7 +646,7 @@ func (m *SubmitTransactionResponse) Reset()         { *m = SubmitTransactionResp
 func (m *SubmitTransactionResponse) String() string { return proto.CompactTextString(m) }
 func (*SubmitTransactionResponse) ProtoMessage()    {}
 func (*SubmitTransactionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_afc31d04251e05fb, []int{12}
+	return fileDescriptor_afc31d04251e05fb, []int{14}
 }
 func (m *SubmitTransactionResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -569,9 +676,12 @@ func (m *SubmitTransactionResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SubmitTransactionResponse proto.InternalMessageInfo
 
 func init() {
+	proto.RegisterEnum("pb.MessageType", MessageType_name, MessageType_value)
 	proto.RegisterType((*SimpleSetterArg)(nil), "pb.SimpleSetterArg")
 	proto.RegisterType((*Id128)(nil), "pb.Id128")
+	proto.RegisterType((*BaseMessage)(nil), "pb.BaseMessage")
 	proto.RegisterType((*Transaction)(nil), "pb.Transaction")
+	proto.RegisterType((*LowIsoRead)(nil), "pb.LowIsoRead")
 	proto.RegisterType((*TransactionBatch)(nil), "pb.TransactionBatch")
 	proto.RegisterType((*LowIsolationReadRequest)(nil), "pb.LowIsolationReadRequest")
 	proto.RegisterType((*LowIsolationReadResponse)(nil), "pb.LowIsolationReadResponse")
@@ -587,55 +697,60 @@ func init() {
 func init() { proto.RegisterFile("pb/calvin.proto", fileDescriptor_afc31d04251e05fb) }
 
 var fileDescriptor_afc31d04251e05fb = []byte{
-	// 757 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x55, 0x51, 0x6f, 0x1a, 0x39,
-	0x10, 0x66, 0x59, 0x20, 0x30, 0x10, 0x41, 0x7c, 0xb9, 0x9c, 0x43, 0xee, 0x08, 0x5a, 0x45, 0xa7,
-	0xbd, 0x93, 0x0e, 0x72, 0x44, 0x27, 0x5d, 0x2b, 0xe5, 0x21, 0xa9, 0xda, 0x0a, 0x85, 0xa6, 0x91,
-	0xa1, 0x6d, 0x1e, 0xfa, 0xb2, 0xb0, 0x0e, 0x45, 0x05, 0xbc, 0xb5, 0x4d, 0x93, 0xf4, 0x07, 0xf4,
-	0x37, 0x54, 0x7d, 0x6a, 0xff, 0x4d, 0x1e, 0xf3, 0x13, 0x9a, 0xf4, 0x25, 0x3f, 0xa3, 0xb2, 0x0d,
-	0xc9, 0x02, 0x4b, 0xfa, 0xb2, 0xeb, 0xf9, 0xe6, 0xf3, 0x78, 0x66, 0xfc, 0xcd, 0x2e, 0xe4, 0x83,
-	0x76, 0xb5, 0xe3, 0xf5, 0xdf, 0xf7, 0x86, 0x95, 0x80, 0x33, 0xc9, 0x50, 0x3c, 0x68, 0x17, 0x57,
-	0xbb, 0xac, 0xcb, 0xb4, 0x59, 0x55, 0x2b, 0xe3, 0x29, 0xfe, 0xd9, 0x65, 0x15, 0x2a, 0x3b, 0x7e,
-	0xa5, 0xc7, 0xaa, 0xea, 0x5d, 0xe5, 0xde, 0x89, 0xd4, 0x8f, 0xa0, 0xad, 0x5f, 0x86, 0xe7, 0x3c,
-	0x80, 0x7c, 0xb3, 0x37, 0x08, 0xfa, 0xb4, 0x49, 0xa5, 0xa4, 0x7c, 0x8f, 0x77, 0x51, 0x01, 0xec,
-	0x03, 0x7a, 0x8e, 0xad, 0xb2, 0xe5, 0xe6, 0x88, 0x5a, 0xa2, 0x55, 0x48, 0xbe, 0xf4, 0xfa, 0x23,
-	0x8a, 0xe3, 0x1a, 0x33, 0x86, 0xb3, 0x0b, 0xc9, 0xba, 0xff, 0x6f, 0xed, 0x7f, 0xe5, 0x7e, 0x11,
-	0x04, 0x94, 0xeb, 0x2d, 0x09, 0x62, 0x0c, 0x85, 0x36, 0xd8, 0x29, 0xe5, 0x7a, 0x53, 0x82, 0x18,
-	0xe3, 0x61, 0xfa, 0xe6, 0xcb, 0xa6, 0x75, 0xf3, 0x75, 0xd3, 0x72, 0x3e, 0xdb, 0x90, 0x6d, 0x71,
-	0x6f, 0x28, 0xbc, 0x8e, 0xec, 0xb1, 0x21, 0x5a, 0x87, 0x78, 0xdd, 0xd7, 0x21, 0xb2, 0xb5, 0x4c,
-	0x25, 0x68, 0x57, 0x74, 0x70, 0x12, 0xaf, 0xfb, 0x08, 0xc3, 0x12, 0xa1, 0x9e, 0xdf, 0xa4, 0x12,
-	0xc7, 0xcb, 0xb6, 0x9b, 0x23, 0x13, 0x13, 0x39, 0x90, 0x53, 0xcb, 0x57, 0xbc, 0x27, 0x55, 0x05,
-	0xd8, 0xd6, 0xee, 0x29, 0x0c, 0x95, 0x21, 0xab, 0x6c, 0xca, 0x0f, 0x99, 0x4f, 0x05, 0x4e, 0x94,
-	0x6d, 0x37, 0x41, 0xc2, 0x90, 0x62, 0x68, 0xf6, 0x98, 0x91, 0x34, 0x8c, 0x10, 0x84, 0x5c, 0xc8,
-	0x37, 0x25, 0xe3, 0xd4, 0x3f, 0xe2, 0xac, 0x43, 0xfd, 0x11, 0xa7, 0x38, 0x55, 0xb6, 0xdc, 0x0c,
-	0x99, 0x85, 0xd1, 0x36, 0xfc, 0x32, 0x03, 0xed, 0xf1, 0xae, 0xc0, 0x4b, 0x3a, 0xb1, 0x28, 0x17,
-	0xaa, 0x00, 0xaa, 0x8b, 0x06, 0x3b, 0xad, 0x0b, 0xd6, 0xf7, 0x54, 0x2b, 0x54, 0x6a, 0x38, 0x5d,
-	0xb6, 0xdc, 0x34, 0x89, 0xf0, 0xa0, 0x63, 0xc0, 0xb3, 0x18, 0xa1, 0x22, 0x60, 0x43, 0x41, 0x71,
-	0x46, 0xb7, 0xef, 0x77, 0xd5, 0xbe, 0x45, 0x1c, 0xb2, 0x70, 0x77, 0xe8, 0x72, 0x9e, 0x42, 0x21,
-	0x74, 0x37, 0xfb, 0x9e, 0xec, 0xbc, 0x41, 0x3b, 0x90, 0x93, 0x77, 0x98, 0xc0, 0x56, 0xd9, 0x76,
-	0xb3, 0xb5, 0xbc, 0x3a, 0x2b, 0xc4, 0x25, 0x53, 0x24, 0xe7, 0x1f, 0xf8, 0x6d, 0xfe, 0xb8, 0x77,
-	0x23, 0x2a, 0x24, 0x42, 0x90, 0x38, 0xa0, 0xe7, 0x26, 0x4e, 0x8e, 0xe8, 0xb5, 0xf3, 0x61, 0x71,
-	0x6d, 0x51, 0x7c, 0xb4, 0x06, 0x29, 0x2d, 0x46, 0x31, 0x16, 0xc6, 0xd8, 0x52, 0xdc, 0x16, 0xe5,
-	0x03, 0x6c, 0x6b, 0xed, 0xe9, 0xb5, 0x12, 0x64, 0x7d, 0xe8, 0xd3, 0x33, 0x9c, 0x30, 0x82, 0xd4,
-	0x46, 0xa8, 0xe6, 0x8f, 0x16, 0xac, 0x10, 0x3a, 0x60, 0x92, 0x86, 0xb3, 0xdc, 0x84, 0x64, 0xeb,
-	0x6c, 0x18, 0xa5, 0x4c, 0x83, 0xdf, 0xa6, 0x15, 0x8f, 0x4c, 0xcb, 0x9e, 0x4a, 0x6b, 0x0b, 0x96,
-	0x5b, 0x4c, 0x7a, 0xfd, 0xc3, 0xd1, 0xa0, 0xc1, 0x3a, 0x6f, 0x85, 0x4e, 0x65, 0x99, 0x4c, 0x83,
-	0xce, 0xdf, 0x80, 0xc2, 0x79, 0x8c, 0xcb, 0x5f, 0x85, 0xe4, 0x63, 0xce, 0x99, 0x99, 0xb2, 0x0c,
-	0x31, 0x86, 0xd3, 0x80, 0x34, 0xf1, 0x4e, 0xe4, 0x11, 0xa5, 0x1c, 0x95, 0x00, 0xd4, 0x5a, 0x29,
-	0x76, 0x9c, 0x6f, 0x82, 0x84, 0x10, 0x25, 0x73, 0xc5, 0xdb, 0xf3, 0x7d, 0x4e, 0x85, 0xd0, 0x73,
-	0x99, 0x21, 0x61, 0xc8, 0x39, 0x86, 0x6c, 0x53, 0xd2, 0x60, 0x52, 0xfb, 0xcf, 0x02, 0xfe, 0x05,
-	0x4b, 0xcf, 0xa8, 0x10, 0x5e, 0xd7, 0x7c, 0x19, 0x94, 0x18, 0xcc, 0x17, 0xa6, 0x32, 0x86, 0xc9,
-	0xc4, 0xef, 0x6c, 0x41, 0xce, 0x44, 0xbe, 0xb7, 0x9a, 0x22, 0xe0, 0xe6, 0xa8, 0x3d, 0xe8, 0xc9,
-	0xb0, 0xa0, 0x4c, 0x32, 0xce, 0x06, 0xac, 0x47, 0xf8, 0x4c, 0xb8, 0x5a, 0x07, 0x0a, 0x73, 0x73,
-	0xf2, 0x3c, 0x02, 0xdb, 0x88, 0x9e, 0x0c, 0x7d, 0x42, 0xf1, 0xde, 0xb1, 0x71, 0x62, 0xb5, 0x03,
-	0x80, 0xbb, 0x7b, 0x41, 0xbb, 0x53, 0xd6, 0xaf, 0x6a, 0xef, 0x9c, 0x7a, 0x8a, 0x6b, 0xb3, 0xf0,
-	0x6d, 0xb0, 0x27, 0xb0, 0xac, 0x3a, 0xa9, 0x8b, 0x09, 0x18, 0x97, 0xe8, 0x3f, 0x00, 0xd5, 0xa1,
-	0xa6, 0xe4, 0xd4, 0x1b, 0x20, 0x3d, 0x56, 0xa1, 0xbb, 0x28, 0x16, 0xee, 0x80, 0x49, 0x0c, 0xd7,
-	0xda, 0xb6, 0x6a, 0xaf, 0x21, 0xf5, 0x48, 0xff, 0x12, 0x10, 0x81, 0x95, 0xb9, 0x06, 0x21, 0x5d,
-	0xd3, 0xa2, 0x9e, 0x16, 0xff, 0x58, 0xe0, 0x9d, 0x9c, 0xb0, 0x8f, 0x2f, 0xae, 0x4a, 0xb1, 0xcb,
-	0xab, 0x52, 0xec, 0xe2, 0xba, 0x64, 0x5d, 0x5e, 0x97, 0xac, 0x6f, 0xd7, 0x25, 0xeb, 0xd3, 0xf7,
-	0x52, 0xac, 0x9d, 0xd2, 0xff, 0x8f, 0x9d, 0x1f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x26, 0xc9, 0xe2,
-	0xaf, 0x94, 0x06, 0x00, 0x00,
+	// 846 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0xdd, 0x6e, 0x1b, 0x45,
+	0x14, 0xf6, 0x7a, 0xd7, 0x49, 0x7c, 0xd6, 0xc1, 0xee, 0x10, 0xca, 0xd4, 0x05, 0xc7, 0x5a, 0x2a,
+	0xb4, 0x54, 0xc2, 0x09, 0xae, 0x90, 0x00, 0xa9, 0x17, 0x4e, 0x29, 0x68, 0x15, 0x93, 0x54, 0xb3,
+	0x86, 0xf6, 0x02, 0xa9, 0x5a, 0x7b, 0x4f, 0x8d, 0x85, 0xed, 0x59, 0x66, 0xc6, 0xb4, 0xe1, 0x01,
+	0xb8, 0xe1, 0x05, 0xb8, 0x84, 0x27, 0xe1, 0xb6, 0x97, 0x7d, 0x04, 0x1a, 0x6e, 0xfa, 0x18, 0x68,
+	0x66, 0xec, 0x66, 0x1d, 0xdb, 0xa1, 0x12, 0x37, 0xf6, 0x9c, 0xef, 0x7c, 0x73, 0xf6, 0x3b, 0x7f,
+	0xbb, 0x50, 0xcd, 0xfa, 0x07, 0x83, 0x64, 0xfc, 0xf3, 0x68, 0xda, 0xca, 0x04, 0x57, 0x9c, 0x14,
+	0xb3, 0x7e, 0x7d, 0x6f, 0xc8, 0x87, 0xdc, 0x98, 0x07, 0xfa, 0x64, 0x3d, 0xf5, 0x0f, 0x87, 0xbc,
+	0x85, 0x6a, 0x90, 0xb6, 0x46, 0xfc, 0x40, 0xff, 0x1f, 0x88, 0xe4, 0x89, 0x32, 0x3f, 0x59, 0xdf,
+	0xfc, 0x59, 0x5e, 0xf0, 0x39, 0x54, 0xe3, 0xd1, 0x24, 0x1b, 0x63, 0x8c, 0x4a, 0xa1, 0xe8, 0x88,
+	0x21, 0xa9, 0x81, 0x7b, 0x8c, 0x67, 0xd4, 0x69, 0x3a, 0x61, 0x85, 0xe9, 0x23, 0xd9, 0x83, 0xd2,
+	0x77, 0xc9, 0x78, 0x86, 0xb4, 0x68, 0x30, 0x6b, 0x04, 0x77, 0xa1, 0x14, 0xa5, 0x9f, 0xb4, 0x3f,
+	0xd3, 0xee, 0x6f, 0xb3, 0x0c, 0x85, 0xb9, 0xe2, 0x31, 0x6b, 0x68, 0xb4, 0xcb, 0x9f, 0xa2, 0x30,
+	0x97, 0x3c, 0x66, 0x8d, 0x2f, 0x76, 0x5e, 0xfd, 0xb1, 0xef, 0xbc, 0xfa, 0x73, 0xdf, 0x09, 0xda,
+	0xe0, 0x1f, 0x25, 0x12, 0xbf, 0x41, 0x29, 0x93, 0x21, 0x92, 0x0f, 0xc0, 0xeb, 0x9d, 0x65, 0x68,
+	0x62, 0xbc, 0xd5, 0xae, 0xb6, 0xb2, 0x7e, 0x6b, 0xee, 0xd2, 0x30, 0x33, 0xce, 0xe0, 0x2f, 0x17,
+	0xfc, 0x9e, 0x48, 0xa6, 0x32, 0x19, 0xa8, 0x11, 0x9f, 0xbe, 0xd1, 0x25, 0x72, 0x03, 0x8a, 0x51,
+	0x6a, 0x54, 0xf8, 0xed, 0xb2, 0xa6, 0x18, 0xd5, 0xac, 0x18, 0xa5, 0x84, 0xc2, 0x36, 0xc3, 0x24,
+	0x8d, 0x51, 0x51, 0xb7, 0xe9, 0x86, 0x15, 0xb6, 0x30, 0x49, 0x00, 0x15, 0x7d, 0x7c, 0x28, 0x46,
+	0x4a, 0x97, 0x86, 0x7a, 0xc6, 0xbd, 0x84, 0x91, 0x26, 0xf8, 0xda, 0x46, 0x71, 0xc2, 0x53, 0x94,
+	0xb4, 0xd4, 0x74, 0x43, 0x8f, 0xe5, 0x21, 0xcd, 0x30, 0xec, 0x39, 0x63, 0xcb, 0x32, 0x72, 0x10,
+	0x09, 0xa1, 0x1a, 0x2b, 0x2e, 0x30, 0x7d, 0x20, 0xf8, 0x00, 0xd3, 0x99, 0x40, 0xba, 0xdd, 0x74,
+	0xc2, 0x32, 0xbb, 0x0c, 0x93, 0x43, 0x78, 0xfb, 0x12, 0xd4, 0x11, 0x43, 0x49, 0x77, 0x8c, 0xb0,
+	0x75, 0x2e, 0xd2, 0x02, 0x12, 0xc9, 0x2e, 0x7f, 0x1a, 0x49, 0x3e, 0x4e, 0x74, 0xbd, 0xb4, 0x34,
+	0x5a, 0x6e, 0x3a, 0xe1, 0x0e, 0x5b, 0xe3, 0x21, 0x8f, 0x80, 0x5e, 0xc6, 0x18, 0xca, 0x8c, 0x4f,
+	0x25, 0x52, 0x30, 0xe5, 0x7b, 0x4f, 0x97, 0x6f, 0x13, 0x87, 0x6d, 0xbc, 0x9d, 0xeb, 0xfa, 0x6f,
+	0x0e, 0x80, 0xa5, 0x99, 0x47, 0xbe, 0x51, 0x03, 0xaf, 0xd2, 0x55, 0xfc, 0x3f, 0xba, 0x82, 0xaf,
+	0xa1, 0x96, 0x1b, 0xa7, 0xa3, 0x44, 0x0d, 0x7e, 0x20, 0x77, 0xa0, 0xa2, 0x2e, 0x30, 0x49, 0x9d,
+	0xa6, 0x1b, 0xfa, 0x56, 0x5a, 0x8e, 0xcb, 0x96, 0x48, 0xc1, 0xc7, 0xf0, 0xee, 0xea, 0x43, 0x7e,
+	0x9a, 0xa1, 0x54, 0x84, 0x80, 0x77, 0x8c, 0x67, 0x36, 0x4e, 0x85, 0x99, 0x73, 0xf0, 0xcb, 0xe6,
+	0x8c, 0xd6, 0xf1, 0xc9, 0x75, 0xd8, 0x32, 0x3b, 0x27, 0x69, 0xd1, 0xa0, 0x73, 0x4b, 0x73, 0x7b,
+	0x28, 0x26, 0xd4, 0x35, 0x2b, 0x66, 0xce, 0x7a, 0xef, 0xa2, 0x69, 0x8a, 0xcf, 0xa8, 0x67, 0xf7,
+	0xce, 0x18, 0xb9, 0x0e, 0xfc, 0xea, 0xc0, 0x35, 0x86, 0x13, 0xae, 0x30, 0xaf, 0x72, 0x1f, 0x4a,
+	0xbd, 0x67, 0xd3, 0x28, 0x35, 0x9d, 0x58, 0xda, 0x13, 0x8b, 0xbf, 0x96, 0x55, 0x5c, 0x2b, 0xcb,
+	0x5d, 0x92, 0x75, 0x0b, 0x76, 0x7b, 0x5c, 0x25, 0xe3, 0x93, 0xd9, 0xa4, 0xcb, 0x07, 0x3f, 0x4a,
+	0x23, 0x65, 0x97, 0x2d, 0x83, 0xc1, 0x6d, 0x20, 0x79, 0x1d, 0xf3, 0xf4, 0xf7, 0xa0, 0x74, 0x5f,
+	0x08, 0x6e, 0x5f, 0x26, 0x65, 0x66, 0x8d, 0xa0, 0x0b, 0x3b, 0x2c, 0x79, 0xa2, 0x1e, 0x20, 0x0a,
+	0xd2, 0x00, 0xd0, 0x67, 0xbd, 0x3f, 0x73, 0xbd, 0x1e, 0xcb, 0x21, 0x7a, 0xe9, 0x34, 0xaf, 0x93,
+	0xa6, 0x02, 0xa5, 0x34, 0x13, 0x52, 0x66, 0x79, 0x28, 0x78, 0x04, 0x7e, 0xac, 0x30, 0x5b, 0xe4,
+	0xfe, 0x5f, 0x01, 0x3f, 0x82, 0xed, 0xf9, 0x50, 0xce, 0xc7, 0xad, 0xda, 0xb2, 0x2f, 0xd2, 0xc5,
+	0xac, 0xb2, 0x85, 0x3f, 0xb8, 0x05, 0x15, 0x1b, 0xf9, 0xca, 0x6c, 0xea, 0x40, 0xe3, 0x59, 0x7f,
+	0x32, 0x52, 0xf9, 0x81, 0xb2, 0x62, 0x82, 0x9b, 0x70, 0x63, 0x8d, 0xcf, 0x86, 0xbb, 0x7d, 0x08,
+	0x7e, 0x6e, 0x3d, 0x48, 0x15, 0xfc, 0x1e, 0xeb, 0x9c, 0xc4, 0x9d, 0x7b, 0xbd, 0xe8, 0xf4, 0xa4,
+	0x56, 0x20, 0x35, 0xa8, 0x74, 0x4f, 0x1f, 0x3e, 0x8e, 0xe2, 0xd3, 0xc7, 0xec, 0x7e, 0xe7, 0xcb,
+	0x9a, 0xd3, 0x1e, 0x40, 0x6d, 0x65, 0xcf, 0x4f, 0xd7, 0x60, 0x37, 0xd7, 0x6f, 0x90, 0xd1, 0x54,
+	0xbf, 0x72, 0xbd, 0x82, 0x42, 0xfb, 0x18, 0xe0, 0xa2, 0x93, 0xe4, 0xee, 0x92, 0xf5, 0x8e, 0xbe,
+	0xbb, 0x32, 0x6f, 0xf5, 0xeb, 0x97, 0xe1, 0xd7, 0xc1, 0xbe, 0x82, 0x5d, 0x5d, 0x7b, 0x93, 0x7e,
+	0xc6, 0x85, 0x22, 0x9f, 0x02, 0xe8, 0x9a, 0xc6, 0x4a, 0x60, 0x32, 0x21, 0x66, 0x11, 0x73, 0xdd,
+	0xab, 0xd7, 0x2e, 0x80, 0x45, 0x8c, 0xd0, 0x39, 0x74, 0xda, 0xdf, 0xc3, 0xd6, 0x3d, 0xf3, 0xad,
+	0x24, 0x0c, 0xae, 0xad, 0x94, 0x94, 0x98, 0x9c, 0x36, 0x75, 0xa1, 0xfe, 0xfe, 0x06, 0xef, 0xe2,
+	0x09, 0x47, 0xf4, 0xf9, 0xcb, 0x46, 0xe1, 0xc5, 0xcb, 0x46, 0xe1, 0xf9, 0x79, 0xc3, 0x79, 0x71,
+	0xde, 0x70, 0xfe, 0x3e, 0x6f, 0x38, 0xbf, 0xff, 0xd3, 0x28, 0xf4, 0xb7, 0xcc, 0x87, 0xf5, 0xce,
+	0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0xb7, 0x26, 0x6d, 0x63, 0xad, 0x07, 0x00, 0x00,
 }
 
 func (this *Id128) Compare(that interface{}) int {
@@ -704,6 +819,12 @@ func (this *Transaction) Compare(that interface{}) int {
 		return 1
 	} else if this == nil {
 		return -1
+	}
+	if this.Type != that1.Type {
+		if this.Type < that1.Type {
+			return -1
+		}
+		return 1
 	}
 	if c := this.Id.Compare(that1.Id); c != 0 {
 		return c
@@ -900,6 +1021,9 @@ func (this *Transaction) Equal(that interface{}) bool {
 	if that1 == nil {
 		return this == nil
 	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
 		return false
 	}
 	if !this.Id.Equal(that1.Id) {
@@ -1366,6 +1490,32 @@ func (m *Id128) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *BaseMessage) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *BaseMessage) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Type != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.Type))
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func (m *Transaction) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -1381,8 +1531,13 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if m.Type != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.Type))
+	}
 	if m.Id != nil {
-		dAtA[i] = 0xa
+		dAtA[i] = 0x12
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(m.Id.Size()))
 		n1, err := m.Id.MarshalTo(dAtA[i:])
@@ -1393,7 +1548,7 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 	}
 	if len(m.ReadSet) > 0 {
 		for _, b := range m.ReadSet {
-			dAtA[i] = 0x12
+			dAtA[i] = 0x1a
 			i++
 			i = encodeVarintCalvin(dAtA, i, uint64(len(b)))
 			i += copy(dAtA[i:], b)
@@ -1401,7 +1556,7 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 	}
 	if len(m.ReadWriteSet) > 0 {
 		for _, b := range m.ReadWriteSet {
-			dAtA[i] = 0x1a
+			dAtA[i] = 0x22
 			i++
 			i = encodeVarintCalvin(dAtA, i, uint64(len(b)))
 			i += copy(dAtA[i:], b)
@@ -1419,7 +1574,7 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 			dAtA3[j2] = uint8(num)
 			j2++
 		}
-		dAtA[i] = 0x22
+		dAtA[i] = 0x2a
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(j2))
 		i += copy(dAtA[i:], dAtA3[:j2])
@@ -1436,27 +1591,27 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 			dAtA5[j4] = uint8(num)
 			j4++
 		}
-		dAtA[i] = 0x2a
+		dAtA[i] = 0x32
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(j4))
 		i += copy(dAtA[i:], dAtA5[:j4])
 	}
 	if len(m.StoredProcedure) > 0 {
-		dAtA[i] = 0x32
+		dAtA[i] = 0x3a
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(len(m.StoredProcedure)))
 		i += copy(dAtA[i:], m.StoredProcedure)
 	}
 	if len(m.StoredProcedureArgs) > 0 {
 		for _, b := range m.StoredProcedureArgs {
-			dAtA[i] = 0x3a
+			dAtA[i] = 0x42
 			i++
 			i = encodeVarintCalvin(dAtA, i, uint64(len(b)))
 			i += copy(dAtA[i:], b)
 		}
 	}
 	if m.IsLowIsolationRead {
-		dAtA[i] = 0x40
+		dAtA[i] = 0x48
 		i++
 		if m.IsLowIsolationRead {
 			dAtA[i] = 1
@@ -1466,7 +1621,7 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 		i++
 	}
 	if m.LowIsolationReadResponse != nil {
-		dAtA[i] = 0x4a
+		dAtA[i] = 0x52
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(m.LowIsolationReadResponse.Size()))
 		n6, err := m.LowIsolationReadResponse.MarshalTo(dAtA[i:])
@@ -1474,6 +1629,42 @@ func (m *Transaction) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err
 		}
 		i += n6
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *LowIsoRead) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *LowIsoRead) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.Type != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.Type))
+	}
+	if m.LowIsolationReadResponse != nil {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintCalvin(dAtA, i, uint64(m.LowIsolationReadResponse.Size()))
+		n7, err := m.LowIsolationReadResponse.MarshalTo(dAtA[i:])
+		if err != nil {
+			return 0, err
+		}
+		i += n7
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -1609,11 +1800,11 @@ func (m *RemoteReadRequest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0xa
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(m.TxnId.Size()))
-		n7, err := m.TxnId.MarshalTo(dAtA[i:])
+		n8, err := m.TxnId.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n7
+		i += n8
 	}
 	if len(m.Keys) > 0 {
 		for _, b := range m.Keys {
@@ -1725,11 +1916,11 @@ func (m *StepRequest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x12
 		i++
 		i = encodeVarintCalvin(dAtA, i, uint64(m.Message.Size()))
-		n8, err := m.Message.MarshalTo(dAtA[i:])
+		n9, err := m.Message.MarshalTo(dAtA[i:])
 		if err != nil {
 			return 0, err
 		}
-		i += n8
+		i += n9
 	}
 	if m.XXX_unrecognized != nil {
 		i += copy(dAtA[i:], m.XXX_unrecognized)
@@ -1853,12 +2044,30 @@ func (m *Id128) Size() (n int) {
 	return n
 }
 
+func (m *BaseMessage) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Type != 0 {
+		n += 1 + sovCalvin(uint64(m.Type))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
 func (m *Transaction) Size() (n int) {
 	if m == nil {
 		return 0
 	}
 	var l int
 	_ = l
+	if m.Type != 0 {
+		n += 1 + sovCalvin(uint64(m.Type))
+	}
 	if m.Id != nil {
 		l = m.Id.Size()
 		n += 1 + l + sovCalvin(uint64(l))
@@ -1901,6 +2110,25 @@ func (m *Transaction) Size() (n int) {
 	}
 	if m.IsLowIsolationRead {
 		n += 2
+	}
+	if m.LowIsolationReadResponse != nil {
+		l = m.LowIsolationReadResponse.Size()
+		n += 1 + l + sovCalvin(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *LowIsoRead) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.Type != 0 {
+		n += 1 + sovCalvin(uint64(m.Type))
 	}
 	if m.LowIsolationReadResponse != nil {
 		l = m.LowIsolationReadResponse.Size()
@@ -2330,6 +2558,79 @@ func (m *Id128) Unmarshal(dAtA []byte) error {
 	}
 	return nil
 }
+func (m *BaseMessage) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCalvin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: BaseMessage: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: BaseMessage: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= MessageType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCalvin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
 func (m *Transaction) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
 	iNdEx := 0
@@ -2360,6 +2661,25 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 		}
 		switch fieldNum {
 		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= MessageType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Id", wireType)
 			}
@@ -2395,7 +2715,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
-		case 2:
+		case 3:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReadSet", wireType)
 			}
@@ -2427,7 +2747,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			m.ReadSet = append(m.ReadSet, make([]byte, postIndex-iNdEx))
 			copy(m.ReadSet[len(m.ReadSet)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 3:
+		case 4:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReadWriteSet", wireType)
 			}
@@ -2459,7 +2779,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			m.ReadWriteSet = append(m.ReadWriteSet, make([]byte, postIndex-iNdEx))
 			copy(m.ReadWriteSet[len(m.ReadWriteSet)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 4:
+		case 5:
 			if wireType == 0 {
 				var v uint64
 				for shift := uint(0); ; shift += 7 {
@@ -2535,7 +2855,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field ReaderNodes", wireType)
 			}
-		case 5:
+		case 6:
 			if wireType == 0 {
 				var v uint64
 				for shift := uint(0); ; shift += 7 {
@@ -2611,7 +2931,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			} else {
 				return fmt.Errorf("proto: wrong wireType = %d for field WriterNodes", wireType)
 			}
-		case 6:
+		case 7:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StoredProcedure", wireType)
 			}
@@ -2643,7 +2963,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			}
 			m.StoredProcedure = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 7:
+		case 8:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field StoredProcedureArgs", wireType)
 			}
@@ -2675,7 +2995,7 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 			m.StoredProcedureArgs = append(m.StoredProcedureArgs, make([]byte, postIndex-iNdEx))
 			copy(m.StoredProcedureArgs[len(m.StoredProcedureArgs)-1], dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
-		case 8:
+		case 9:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field IsLowIsolationRead", wireType)
 			}
@@ -2695,7 +3015,116 @@ func (m *Transaction) Unmarshal(dAtA []byte) error {
 				}
 			}
 			m.IsLowIsolationRead = bool(v != 0)
-		case 9:
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field LowIsolationReadResponse", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if m.LowIsolationReadResponse == nil {
+				m.LowIsolationReadResponse = &LowIsolationReadResponse{}
+			}
+			if err := m.LowIsolationReadResponse.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCalvin(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCalvin
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *LowIsoRead) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCalvin
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: LowIsoRead: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: LowIsoRead: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Type", wireType)
+			}
+			m.Type = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCalvin
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Type |= MessageType(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field LowIsolationReadResponse", wireType)
 			}

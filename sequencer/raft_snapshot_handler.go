@@ -22,3 +22,8 @@ type SnapshotHandler interface {
 	Consume(snapshotData []byte) error
 	Provide(lastSnapshot raftpb.Snapshot, entriesAppliedSinceLastSnapshot []raftpb.Entry) ([]byte, error)
 }
+
+type PartialSnapshotHandler interface {
+	Consume(partitionID int, snapshotData []byte) error
+	Provide(partitionID int, lastSnapshot raftpb.Snapshot, entriesAppliedSinceLastSnapshot []raftpb.Entry) ([]byte, error)
+}

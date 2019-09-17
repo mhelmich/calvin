@@ -35,7 +35,7 @@ const (
 	sequencerBatchFrequencyMs = 100
 )
 
-func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, cip util.ClusterInfoProvider, srvr *grpc.Server, logger *log.Entry) *Sequencer {
+func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers []raft.Peer, storeDir string, connCache util.ConnectionCache, cip util.ClusterInfoProvider, srvr *grpc.Server, snapshotHandler SnapshotHandler, logger *log.Entry) *Sequencer {
 	proposeChan := make(chan []byte)
 	proposeConfChangeChan := make(chan raftpb.ConfChange)
 	writerChan := make(chan *pb.Transaction)
@@ -44,7 +44,7 @@ func NewSequencer(raftID uint64, txnBatchChan chan<- *pb.TransactionBatch, peers
 		proposeConfChangeChan: proposeConfChangeChan,
 		writerChan:            writerChan,
 		cip:                   cip,
-		rb:                    newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, connCache, logger),
+		rb:                    newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, connCache, snapshotHandler, logger),
 		logger:                logger,
 	}
 

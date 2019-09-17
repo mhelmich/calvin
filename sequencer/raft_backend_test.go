@@ -44,9 +44,10 @@ func TestRaftBackendBasic(t *testing.T) {
 	storeDir := "./test-TestRaftBackendBasic-" + util.Uint64ToString(util.RandomRaftId()) + "/"
 	defer os.RemoveAll(storeDir)
 	mockCC := new(mocks.ConnectionCache)
+	mockSH := new(mocks.SnapshotHandler)
 	logger := log.WithFields(log.Fields{})
 
-	newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, mockCC, logger)
+	newRaftBackend(raftID, proposeChan, proposeConfChangeChan, txnBatchChan, peers, storeDir, mockCC, mockSH, logger)
 	id, err := ulid.NewId()
 	assert.Nil(t, err)
 	batch := &pb.TransactionBatch{

@@ -41,10 +41,11 @@ func TestSequencerBasic(t *testing.T) {
 	defer os.RemoveAll(storeDir)
 	mockCC := new(mocks.ConnectionCache)
 	mockCIP := new(mocks.ClusterInfoProvider)
+	mockSH := new(mocks.SnapshotHandler)
 	srvr := grpc.NewServer()
 	logger := log.WithFields(log.Fields{})
 
-	s := NewSequencer(raftID, txnBatchChan, peers, storeDir, mockCC, mockCIP, srvr, logger)
+	s := NewSequencer(raftID, txnBatchChan, peers, storeDir, mockCC, mockCIP, srvr, mockSH, logger)
 	id, err := ulid.NewId()
 	assert.Nil(t, err)
 

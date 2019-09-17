@@ -87,7 +87,7 @@ func NewCalvin(opts *Options) *Calvin {
 	if !strings.HasSuffix(storeDir, "/") {
 		storeDir = storeDir + "/"
 	}
-	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, logger)
+	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, opts.snapshotHandler, logger)
 
 	// releaser might be waiting to send on ready channel
 	readyTxnChan := make(chan *pb.Transaction, goodChannelSize)

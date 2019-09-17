@@ -18,6 +18,7 @@ package calvin
 
 import (
 	"io"
+	"os"
 	"time"
 
 	bolt "github.com/coreos/bbolt"
@@ -50,12 +51,14 @@ func newBoltDataStore(dir string, logger *log.Entry) *boltDataStore {
 
 	return &boltDataStore{
 		db:     db,
+		dir:    dir,
 		logger: logger,
 	}
 }
 
 type boltDataStore struct {
 	db     *bolt.DB
+	dir    string
 	logger *log.Entry
 }
 
@@ -75,6 +78,13 @@ func (bds *boltDataStore) Snapshot(w io.Writer) error {
 
 func (bds *boltDataStore) Close() {
 	bds.db.Close()
+}
+
+func (bds *boltDataStore) Delete() {
+	defer func() {
+		bds.Close()
+		os.RemoveAll(bds.dir + dbName)
+	}()
 }
 
 // Later you might wanna look at this:

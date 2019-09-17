@@ -97,7 +97,18 @@ func NewCalvin(opts *Options) *Calvin {
 
 	// dataStore := newBoltDataStore(storeDir, logger)
 	dataStore := newBadgerDataStore(storeDir, logger)
-	engine := execution.NewEngine(readyTxnChan, doneTxnChan, dataStore, srvr, cc, cip, numWorkerThreads, logger)
+
+	engineOpts := execution.EngineOpts{
+		ScheduledTxnChan: readyTxnChan,
+		DoneTxnChan:      doneTxnChan,
+		Stp:              dataStore,
+		Srvr:             srvr,
+		ConnCache:        cc,
+		Cip:              cip,
+		NumWorkers:       numWorkerThreads,
+		Logger:           logger,
+	}
+	engine := execution.NewEngine(engineOpts)
 
 	go srvr.Serve(lis)
 

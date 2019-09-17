@@ -72,7 +72,17 @@ func TestEngineBasic(t *testing.T) {
 	)
 	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
 
-	NewEngine(scheduledTxnChan, doneTxnChan, mockDS, srvr, mockCC, mockCIP, 2, log.WithFields(log.Fields{}))
+	opts := EngineOpts{
+		ScheduledTxnChan: scheduledTxnChan,
+		DoneTxnChan:      doneTxnChan,
+		Stp:              mockDS,
+		Srvr:             srvr,
+		ConnCache:        mockCC,
+		Cip:              mockCIP,
+		NumWorkers:       2,
+		Logger:           log.WithFields(log.Fields{}),
+	}
+	NewEngine(opts)
 
 	txnID, err := ulid.NewId()
 	assert.Nil(t, err)

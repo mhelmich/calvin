@@ -45,24 +45,35 @@ func newLuaState() *glua.LState {
 	return state
 }
 
-func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.Transaction, stp util.DataStoreTxnProvider, srvr *grpc.Server, connCache util.ConnectionCache, cip util.ClusterInfoProvider, numWorkers int, logger *log.Entry) *Engine {
-	readyToExecChan := make(chan *txnExecEnvironment, numWorkers*2+1)
+type EngineOpts struct {
+	ScheduledTxnChan <-chan *pb.Transaction
+	DoneTxnChan      chan<- *pb.Transaction
+	Stp              util.DataStoreTxnProvider
+	Srvr             *grpc.Server
+	ConnCache        util.ConnectionCache
+	Cip              util.ClusterInfoProvider
+	NumWorkers       int
+	Logger           *log.Entry
+}
 
-	rrs := newRemoteReadServer(readyToExecChan, logger)
-	pb.RegisterRemoteReadServer(srvr, rrs)
+func NewEngine(opts EngineOpts) *Engine {
+	readyToExecChan := make(chan *txnExecEnvironment, opts.NumWorkers*2+1)
+
+	rrs := newRemoteReadServer(readyToExecChan, opts.Logger)
+	pb.RegisterRemoteReadServer(opts.Srvr, rrs)
 	txnsToExecute := &sync.Map{}
 	storedProcs := &sync.Map{}
 	initStoredProcedures(storedProcs)
 	counter := uint64(0)
 
-	for i := 0; i < numWorkers; i++ {
+	for i := 0; i < opts.NumWorkers; i++ {
 		w := worker{
-			scheduledTxnChan: scheduledTxnChan,
+			scheduledTxnChan: opts.ScheduledTxnChan,
 			readyToExecChan:  readyToExecChan,
-			doneTxnChan:      doneTxnChan,
-			stp:              stp,
-			connCache:        connCache,
-			cip:              cip,
+			doneTxnChan:      opts.DoneTxnChan,
+			stp:              opts.Stp,
+			connCache:        opts.ConnCache,
+			cip:              opts.Cip,
 			txnsToExecute:    txnsToExecute,
 			storedProcs:      storedProcs,
 			luaState:         newLuaState(),
@@ -74,7 +85,7 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 			// all workers need their own procedure cache
 			// compiledStoredProcs: &sync.Map{},
 			compiledStoredProcs: make(map[string]*glua.LFunction),
-			logger:              logger,
+			logger:              opts.Logger,
 			counter:             &counter,
 		}
 		go w.runWorker()
@@ -89,7 +100,7 @@ func NewEngine(scheduledTxnChan <-chan *pb.Transaction, doneTxnChan chan<- *pb.T
 		go func() {
 			for {
 				c := atomic.LoadUint64(e.counter)
-				logger.Debugf("processed %d txns", c)
+				opts.Logger.Debugf("processed %d txns", c)
 				time.Sleep(time.Second)
 			}
 		}()

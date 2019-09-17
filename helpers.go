@@ -17,9 +17,13 @@
 package calvin
 
 import (
+	"os"
+
 	"github.com/mhelmich/calvin/pb"
 	"github.com/mhelmich/calvin/sequencer"
 	"github.com/mhelmich/calvin/ulid"
+	"github.com/mhelmich/calvin/util"
+	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -34,20 +38,91 @@ func NewTransaction() *pb.Transaction {
 	}
 }
 
-func DefaultOptions(configPath string, clusterInfoPath string) *Options {
-	return &Options{
-		configPath:      configPath,
-		clusterInfoPath: clusterInfoPath,
+func DefaultOptionsWithFilePaths(configPath string, clusterInfoPath string, dataStore util.DataStoreTxnProvider) Options {
+	cfg := readConfig(configPath)
+	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
+	return Options{
+		hostname:            cfg.Hostname,
+		port:                cfg.Port,
+		raftID:              cfg.RaftID,
+		peers:               cfg.Peers,
+		clusterInfoProvider: cip,
+		dataStore:           dataStore,
+	}
+}
+
+func DefaultOptions(partitionedDataStore util.PartitionedDataStore, clusterInfoProvider util.ClusterInfoProvider) Options {
+	return Options{
+		hostname:             "localhost",
+		port:                 5432,
+		raftID:               util.RandomRaftId(),
+		clusterInfoProvider:  clusterInfoProvider,
+		partitionedDataStore: partitionedDataStore,
 	}
 }
 
 type Options struct {
-	configPath      string
-	clusterInfoPath string
-	snapshotHandler sequencer.SnapshotHandler
+	hostname             string
+	port                 int
+	storePath            string
+	raftID               uint64
+	peers                []uint64
+	clusterInfoProvider  util.ClusterInfoProvider
+	dataStore            util.DataStoreTxnProvider
+	snapshotHandler      sequencer.SnapshotHandler
+	partitionedDataStore util.PartitionedDataStore
+	numWorkers           int
 }
 
-func (o *Options) WithSnapshotHandler(snapshotHandler sequencer.SnapshotHandler) *Options {
+func (o Options) WithSnapshotHandler(snapshotHandler sequencer.SnapshotHandler) Options {
 	o.snapshotHandler = snapshotHandler
 	return o
+}
+
+func (o Options) WithDataStore(dataStore util.PartitionedDataStore) Options {
+	o.partitionedDataStore = dataStore
+	return o
+}
+
+func (o Options) WithPort(port int) Options {
+	o.port = port
+	return o
+}
+
+func (o Options) WithRaftID(raftID uint64) Options {
+	o.raftID = raftID
+	return o
+}
+
+func (o Options) WithNumWorkers(numWorkers int) Options {
+	o.numWorkers = numWorkers
+	return o
+}
+
+func (o Options) WithPeers(peers []uint64) Options {
+	o.peers = peers
+	return o
+}
+
+type config struct {
+	RaftID    uint64
+	Hostname  string
+	Port      int
+	StorePath string
+	Peers     []uint64
+}
+
+func readConfig(configPath string) config {
+	f, err := os.Open(configPath)
+	if err != nil {
+		log.Panicf("%s\n", err.Error())
+	}
+	defer f.Close()
+
+	var config config
+	if err := toml.NewDecoder(f).Decode(&config); err != nil {
+		log.Panicf("%s\n", err.Error())
+	}
+
+	return config
 }

@@ -17,12 +17,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 
 	"github.com/mhelmich/calvin"
+	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -34,16 +36,42 @@ func main() {
 	}
 
 	log.SetLevel(log.DebugLevel)
+	logger := log.WithFields(log.Fields{})
+	cfg := readConfig(cfgFile)
 
-	c := calvin.NewCalvin(calvin.DefaultOptions(cfgFile, "./cluster_info.toml"))
+	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
+	dataStore := newBadgerDataStore(storeDir, logger)
+	c := calvin.NewCalvin(calvin.DefaultOptionsWithFilePaths(cfgFile, "./cluster_info.toml", dataStore))
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	logger := log.WithFields(log.Fields{})
 	startNewHttpServer(port, c, logger)
 
 	<-sig
 	logger.Warningf("Shutting down...\n")
 	c.Stop()
+}
+
+type config struct {
+	RaftID    uint64
+	Hostname  string
+	Port      int
+	StorePath string
+	Peers     []uint64
+}
+
+func readConfig(configPath string) config {
+	f, err := os.Open(configPath)
+	if err != nil {
+		log.Panicf("%s\n", err.Error())
+	}
+	defer f.Close()
+
+	var config config
+	if err := toml.NewDecoder(f).Decode(&config); err != nil {
+		log.Panicf("%s\n", err.Error())
+	}
+
+	return config
 }

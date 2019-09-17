@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package calvin
+package main
 
 import (
 	"fmt"

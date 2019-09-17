@@ -2,6 +2,7 @@
 
 package mocks
 
+import io "io"
 import mock "github.com/stretchr/testify/mock"
 import util "github.com/mhelmich/calvin/util"
 
@@ -31,4 +32,18 @@ func (_m *PartitionProvider) CreatePartition(partitionID int) (util.DataStoreTxn
 	}
 
 	return r0, r1
+}
+
+// Snapshot provides a mock function with given fields: w
+func (_m *PartitionProvider) Snapshot(w io.Writer) error {
+	ret := _m.Called(w)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(io.Writer) error); ok {
+		r0 = rf(w)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
 }

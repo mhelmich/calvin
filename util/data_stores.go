@@ -18,8 +18,9 @@ package util
 
 import "io"
 
-type PartitionProvider interface {
+type PartitionedDataStore interface {
 	CreatePartition(partitionID int) (DataStoreTxnProvider, error)
+	Snapshot(w io.Writer) error
 }
 
 type DataStoreTxnProvider interface {

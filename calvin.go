@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"time"
 
@@ -31,7 +30,6 @@ import (
 	"github.com/mhelmich/calvin/scheduler"
 	"github.com/mhelmich/calvin/sequencer"
 	"github.com/mhelmich/calvin/util"
-	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
 	"go.etcd.io/etcd/raft"
 	"google.golang.org/grpc"
@@ -42,27 +40,18 @@ const (
 	goodChannelSize  = numWorkerThreads*2 + 1
 )
 
-type config struct {
-	RaftID    uint64
-	Hostname  string
-	Port      int
-	StorePath string
-	Peers     []uint64
-}
-
-func NewCalvin(opts *Options) *Calvin {
-	cfg := readConfig(opts.configPath)
-	cip := util.NewClusterInfoProvider(cfg.RaftID, opts.clusterInfoPath)
-	cc := util.NewConnectionCache(cip)
+func NewCalvin(opts Options) *Calvin {
+	// cip := util.NewClusterInfoProvider(opts.raftID, opts.clusterInfoPath)
+	cc := util.NewConnectionCache(opts.clusterInfoProvider)
 
 	logger := log.WithFields(log.Fields{
-		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(cfg.RaftID)),
-		"raftId":    util.Uint64ToString(cfg.RaftID),
+		"raftIdHex": hex.EncodeToString(util.Uint64ToBytes(opts.raftID)),
+		"raftId":    util.Uint64ToString(opts.raftID),
 	})
 
 	srvr := grpc.NewServer()
 	// myAddress := fmt.Sprintf("%s:%d", util.OutboundIP().To4().String(), cfg.Port)
-	myAddress := fmt.Sprintf("%s:%d", cfg.Hostname, cfg.Port)
+	myAddress := fmt.Sprintf("%s:%d", opts.hostname, opts.port)
 	logger.Infof("My address: [%s]", myAddress)
 	lis, err := net.Listen("tcp", myAddress)
 	if err != nil {
@@ -71,23 +60,23 @@ func NewCalvin(opts *Options) *Calvin {
 
 	txnBatchChan := make(chan *pb.TransactionBatch, goodChannelSize)
 	peers := []raft.Peer{raft.Peer{
-		ID:      cfg.RaftID,
+		ID:      opts.raftID,
 		Context: []byte(myAddress),
 	}}
 
-	for idx := range cfg.Peers {
-		addr := cip.GetAddressFor(cfg.Peers[idx])
+	for idx := range opts.peers {
+		addr := opts.clusterInfoProvider.GetAddressFor(opts.peers[idx])
 		peers = append(peers, raft.Peer{
-			ID:      cfg.Peers[idx],
+			ID:      opts.peers[idx],
 			Context: []byte(addr),
 		})
 	}
 
-	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
+	storeDir := fmt.Sprintf("%s%d", opts.storePath, opts.raftID)
 	if !strings.HasSuffix(storeDir, "/") {
 		storeDir = storeDir + "/"
 	}
-	seq := sequencer.NewSequencer(cfg.RaftID, txnBatchChan, peers, storeDir, cc, cip, srvr, opts.snapshotHandler, logger)
+	seq := sequencer.NewSequencer(opts.raftID, txnBatchChan, peers, storeDir, cc, opts.clusterInfoProvider, srvr, opts.snapshotHandler, logger)
 
 	// releaser might be waiting to send on ready channel
 	readyTxnChan := make(chan *pb.Transaction, goodChannelSize)
@@ -95,16 +84,13 @@ func NewCalvin(opts *Options) *Calvin {
 	doneTxnChan := make(chan *pb.Transaction, goodChannelSize)
 	sched := scheduler.NewScheduler(txnBatchChan, readyTxnChan, doneTxnChan, srvr, logger)
 
-	// dataStore := newBoltDataStore(storeDir, logger)
-	dataStore := newBadgerDataStore(storeDir, logger)
-
 	engineOpts := execution.EngineOpts{
 		ScheduledTxnChan: readyTxnChan,
 		DoneTxnChan:      doneTxnChan,
-		Stp:              dataStore,
+		Stp:              opts.dataStore,
 		Srvr:             srvr,
 		ConnCache:        cc,
-		Cip:              cip,
+		Cip:              opts.clusterInfoProvider,
 		NumWorkers:       numWorkerThreads,
 		Logger:           logger,
 	}
@@ -114,29 +100,28 @@ func NewCalvin(opts *Options) *Calvin {
 
 	return &Calvin{
 		cc:           cc,
-		cip:          cip,
+		cip:          opts.clusterInfoProvider,
 		seq:          seq,
 		sched:        sched,
 		engine:       engine,
 		grpcSrvr:     srvr,
-		dataStore:    dataStore,
+		dataStore:    opts.dataStore,
 		txnBatchChan: txnBatchChan,
 		readyTxnChan: readyTxnChan,
 		doneTxnChan:  doneTxnChan,
 		logger:       logger,
-		myRaftID:     cfg.RaftID,
+		myRaftID:     opts.raftID,
 	}
 }
 
 type Calvin struct {
-	cip      util.ClusterInfoProvider
-	cc       util.ConnectionCache
-	seq      *sequencer.Sequencer
-	sched    *scheduler.Scheduler
-	engine   *execution.Engine
-	grpcSrvr *grpc.Server
-	// dataStore    *boltDataStore
-	dataStore    *badgerDataStore
+	cip          util.ClusterInfoProvider
+	cc           util.ConnectionCache
+	seq          *sequencer.Sequencer
+	sched        *scheduler.Scheduler
+	engine       *execution.Engine
+	grpcSrvr     *grpc.Server
+	dataStore    util.DataStoreTxnProvider
 	txnBatchChan chan *pb.TransactionBatch
 	readyTxnChan chan *pb.Transaction
 	doneTxnChan  chan *pb.Transaction
@@ -183,19 +168,4 @@ func (c *Calvin) ChannelsToASCII(out io.Writer) {
 	out.Write([]byte(fmt.Sprintf("txnBatchChan %d/%d\n", len(c.txnBatchChan), cap(c.txnBatchChan))))
 	out.Write([]byte(fmt.Sprintf("readyTxnChan %d/%d\n", len(c.readyTxnChan), cap(c.readyTxnChan))))
 	out.Write([]byte(fmt.Sprintf("doneTxnChan %d/%d\n", len(c.doneTxnChan), cap(c.doneTxnChan))))
-}
-
-func readConfig(path string) config {
-	f, err := os.Open(path)
-	if err != nil {
-		log.Panicf("%s\n", err.Error())
-	}
-	defer f.Close()
-
-	var config config
-	if err := toml.NewDecoder(f).Decode(&config); err != nil {
-		log.Panicf("%s\n", err.Error())
-	}
-
-	return config
 }

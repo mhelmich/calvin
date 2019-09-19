@@ -153,6 +153,13 @@ message StepResponse {
   string Error = 1;
 }
 
+// This is used by the implmentor of the data store!
+// Be mindful of that.
+message PartitionedSnapshot {
+  repeated uint64 PartitionIDs = 1;
+  repeated bytes Snapshots = 2;
+}
+
 //////////////////////////////////////////
 ////////////////////////////////
 // SECTION FOR CALVIN

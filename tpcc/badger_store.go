@@ -26,6 +26,7 @@ import (
 
 	badger "github.com/dgraph-io/badger"
 	calvinpb "github.com/mhelmich/calvin/pb"
+	"github.com/mhelmich/calvin/util"
 	calvinutil "github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
@@ -67,6 +68,14 @@ func (bdsp *partitionedBadgerStore) CreatePartition(partitionID int) (calvinutil
 		bds = v.(*badgerDataStore)
 	}
 	return bds, nil
+}
+
+func (bdsp *partitionedBadgerStore) GetPartition(partitionID int) (calvinutil.DataStoreTxnProvider, error) {
+	v, ok := bdsp.partitions.Load(partitionID)
+	if !ok {
+		return nil, fmt.Errorf("can't find partition with id [%d]", partitionID)
+	}
+	return v.(util.DataStoreTxnProvider), nil
 }
 
 func (bdsp *partitionedBadgerStore) Snapshot(w io.Writer) error {

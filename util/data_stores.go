@@ -20,6 +20,7 @@ import "io"
 
 type PartitionedDataStore interface {
 	CreatePartition(partitionID int) (DataStoreTxnProvider, error)
+	GetPartition(partitionID int) (DataStoreTxnProvider, error)
 	Snapshot(w io.Writer) error
 	Close()
 }

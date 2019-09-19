@@ -34,7 +34,7 @@ func TestBadgerStoreCreatingAndDeleting(t *testing.T) {
 	err := os.MkdirAll(baseDir, os.ModePerm)
 	assert.Nil(t, err)
 	logger := log.WithFields(log.Fields{})
-	bsp := newBadgerStoreProvider(baseDir, logger)
+	bsp := newPartitionedBadgerStore(baseDir, logger)
 	m := &sync.Map{}
 	count := 33
 
@@ -69,7 +69,7 @@ func TestBadgerStoreSnapshot(t *testing.T) {
 	err := os.MkdirAll(baseDir, os.ModePerm)
 	assert.Nil(t, err)
 	logger := log.WithFields(log.Fields{})
-	storeProvider := newBadgerStoreProvider(baseDir, logger)
+	storeProvider := newPartitionedBadgerStore(baseDir, logger)
 
 	store, err := storeProvider.CreatePartition(1)
 	assert.Nil(t, err)

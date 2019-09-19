@@ -41,7 +41,6 @@ const (
 )
 
 func NewCalvin(opts Options) *Calvin {
-	// cip := util.NewClusterInfoProvider(opts.raftID, opts.clusterInfoPath)
 	cc := util.NewConnectionCache(opts.clusterInfoProvider)
 
 	logger := log.WithFields(log.Fields{

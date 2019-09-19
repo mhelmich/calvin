@@ -104,6 +104,11 @@ func (o Options) WithPeers(peers []uint64) Options {
 	return o
 }
 
+func (o Options) WithStorePath(storePath string) Options {
+	o.storePath = storePath
+	return o
+}
+
 type config struct {
 	RaftID    uint64
 	Hostname  string

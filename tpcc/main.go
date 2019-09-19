@@ -24,6 +24,7 @@ import (
 	"syscall"
 
 	"github.com/mhelmich/calvin"
+	"github.com/mhelmich/calvin/util"
 	"github.com/naoina/toml"
 	log "github.com/sirupsen/logrus"
 )
@@ -40,8 +41,10 @@ func main() {
 	cfg := readConfig(cfgFile)
 
 	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
-	dataStore := newBadgerDataStore(storeDir, logger)
-	c := calvin.NewCalvin(calvin.DefaultOptionsWithFilePaths(cfgFile, "./cluster_info.toml", dataStore))
+	dataStore := newPartitionedBadgerStore(storeDir, logger)
+	cip := util.NewClusterInfoProvider(cfg.RaftID, "./cluster_info.toml")
+	calvinOpts := calvin.DefaultOptions(dataStore, cip).WithPort(cfg.Port).WithRaftID(cfg.RaftID).WithPeers(cfg.Peers).WithStorePath(cfg.StorePath)
+	c := calvin.NewCalvin(calvinOpts)
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)

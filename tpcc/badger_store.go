@@ -17,44 +17,101 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
 	"strings"
+	"sync"
 
 	badger "github.com/dgraph-io/badger"
-	"github.com/mhelmich/calvin/util"
+	calvinpb "github.com/mhelmich/calvin/pb"
+	calvinutil "github.com/mhelmich/calvin/util"
 	log "github.com/sirupsen/logrus"
 )
 
-func newBadgerStoreProvider(baseDir string, logger *log.Entry) *badgerDataStoreProvider {
+func newPartitionedBadgerStore(baseDir string, logger *log.Entry) *partitionedBadgerStore {
 	if !strings.HasSuffix(baseDir, "/") {
 		baseDir = baseDir + "/"
 	}
-	return &badgerDataStoreProvider{
-		baseDir: baseDir,
-		logger:  logger,
+	return &partitionedBadgerStore{
+		baseDir:    baseDir,
+		partitions: &sync.Map{},
+		logger:     logger,
 	}
 }
 
-type badgerDataStoreProvider struct {
-	baseDir string
-	logger  *log.Entry
+type partitionedBadgerStore struct {
+	baseDir    string
+	partitions *sync.Map
+	logger     *log.Entry
 }
 
-func (bdsp *badgerDataStoreProvider) CreatePartition(partitionID int) (util.DataStoreTxnProvider, error) {
+func (bdsp *partitionedBadgerStore) CreatePartition(partitionID int) (calvinutil.DataStoreTxnProvider, error) {
 	dir := fmt.Sprintf("%spartition-%d", bdsp.baseDir, partitionID)
 	db, err := badger.Open(badger.DefaultOptions(dir).WithLogger(bdsp.logger))
 	if err != nil {
 		return nil, err
 	}
 
-	return &badgerDataStore{
+	bds := &badgerDataStore{
 		db:          db,
 		dir:         dir,
 		partitionID: partitionID,
 		logger:      bdsp.logger,
-	}, nil
+	}
+
+	v, loaded := bdsp.partitions.LoadOrStore(partitionID, bds)
+	if loaded {
+		bds.Close()
+		bds = v.(*badgerDataStore)
+	}
+	return bds, nil
+}
+
+func (bdsp *partitionedBadgerStore) Snapshot(w io.Writer) error {
+	var err error
+	ps := &calvinpb.PartitionedSnapshot{}
+	bdsp.partitions.Range(func(key, value interface{}) bool {
+		partitionID := key.(uint64)
+		bds := value.(*badgerDataStore)
+		buf := new(bytes.Buffer)
+		err = bds.Snapshot(buf)
+		if err != nil {
+			return false
+		}
+
+		ps.PartitionIDs = append(ps.PartitionIDs, partitionID)
+		ps.Snapshots = append(ps.Snapshots, buf.Bytes())
+		return true
+	})
+
+	if err != nil {
+		bdsp.logger.Errorf("can't collect partitioned snapshot: %s", err.Error())
+		return err
+	}
+
+	data, err := ps.Marshal()
+	if err != nil {
+		bdsp.logger.Errorf("can't create partitioned snapshot: %s", err.Error())
+		return err
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		bdsp.logger.Errorf("can't write partitioned snapshot: %s", err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (bdsp *partitionedBadgerStore) Close() {
+	bdsp.partitions.Range(func(key, value interface{}) bool {
+		bds := value.(*badgerDataStore)
+		defer bds.Close()
+		return true
+	})
 }
 
 func newBadgerDataStore(dir string, logger *log.Entry) *badgerDataStore {
@@ -89,7 +146,7 @@ func (bds *badgerDataStore) Snapshot(w io.Writer) error {
 	return err
 }
 
-func (bds *badgerDataStore) StartTxn(writable bool) (util.DataStoreTxn, error) {
+func (bds *badgerDataStore) StartTxn(writable bool) (calvinutil.DataStoreTxn, error) {
 	txn := bds.db.NewTransaction(writable)
 	return &badgerDataStoreTxn{
 		txn:    txn,

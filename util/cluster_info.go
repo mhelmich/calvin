@@ -27,6 +27,7 @@ import (
 
 type ClusterInfoProvider interface {
 	FindOwnerForKey(key []byte) uint64
+	FindPartitionForKey(key []byte) int
 	IsLocal(key []byte) bool
 	AmIWriter(writerNodes []uint64) bool
 	GetAddressFor(nodeID uint64) string
@@ -63,6 +64,10 @@ func (c *cip) FindOwnerForKey(key []byte) uint64 {
 	}
 
 	return uint64(0)
+}
+
+func (c *cip) FindPartitionForKey(key []byte) int {
+	return c.hashKeyToPartition(key)
 }
 
 func (c *cip) MyPartitions() []int {

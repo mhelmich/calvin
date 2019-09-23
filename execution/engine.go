@@ -48,6 +48,7 @@ func newLuaState() *glua.LState {
 type EngineOpts struct {
 	ScheduledTxnChan <-chan *pb.Transaction
 	DoneTxnChan      chan<- *pb.Transaction
+	PartitionedStore util.PartitionedDataStore
 	Stp              util.DataStoreTxnProvider
 	Srvr             *grpc.Server
 	ConnCache        util.ConnectionCache
@@ -83,7 +84,6 @@ func NewEngine(opts EngineOpts) *Engine {
 			// lua state
 			// and because all workers have their own lua state,
 			// all workers need their own procedure cache
-			// compiledStoredProcs: &sync.Map{},
 			compiledStoredProcs: make(map[string]*glua.LFunction),
 			logger:              opts.Logger,
 			counter:             &counter,
@@ -96,6 +96,7 @@ func NewEngine(opts EngineOpts) *Engine {
 		counter:     &counter,
 	}
 
+	// DEBUG
 	if log.GetLevel() == log.DebugLevel {
 		go func() {
 			for {

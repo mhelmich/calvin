@@ -49,7 +49,6 @@ type EngineOpts struct {
 	ScheduledTxnChan <-chan *pb.Transaction
 	DoneTxnChan      chan<- *pb.Transaction
 	PartitionedStore util.PartitionedDataStore
-	Stp              util.DataStoreTxnProvider
 	Srvr             *grpc.Server
 	ConnCache        util.ConnectionCache
 	Cip              util.ClusterInfoProvider
@@ -72,11 +71,11 @@ func NewEngine(opts EngineOpts) *Engine {
 			scheduledTxnChan: opts.ScheduledTxnChan,
 			readyToExecChan:  readyToExecChan,
 			doneTxnChan:      opts.DoneTxnChan,
-			stp:              opts.Stp,
 			connCache:        opts.ConnCache,
 			cip:              opts.Cip,
 			txnsToExecute:    txnsToExecute,
 			storedProcs:      storedProcs,
+			partitionedStore: opts.PartitionedStore,
 			luaState:         newLuaState(),
 			// premature optimization came back to haunt me
 			// each worker needs its own compiledStoredProc map
@@ -119,13 +118,14 @@ type worker struct {
 	scheduledTxnChan    <-chan *pb.Transaction
 	readyToExecChan     <-chan *txnExecEnvironment
 	doneTxnChan         chan<- *pb.Transaction
-	stp                 util.DataStoreTxnProvider
 	connCache           util.ConnectionCache
 	cip                 util.ClusterInfoProvider
 	txnsToExecute       *sync.Map
 	storedProcs         *sync.Map
 	compiledStoredProcs map[string]*glua.LFunction
 	luaState            *glua.LState
+	partitionIDToTxn    map[int]util.DataStoreTxn
+	partitionedStore    util.PartitionedDataStore
 	logger              *log.Entry
 	counter             *uint64
 }
@@ -210,15 +210,17 @@ func (w *worker) processScheduledTxn(txn *pb.Transaction) {
 func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
 	localKeys := make([][]byte, 0)
 	localValues := make([][]byte, 0)
-	// do local reads
-	dsTxn, err := w.stp.StartTxn(false)
-	if err != nil {
-		w.logger.Panicf("Can't start txn: %s", err.Error())
-	}
+	w.partitionIDToTxn = make(map[int]util.DataStoreTxn)
 
+	// do local reads
 	for idx := range txn.ReadSet {
 		key := txn.ReadSet[idx]
 		if w.cip.IsLocal(key) {
+			dsTxn, err := w.getTxnForKey(key, false)
+			if err != nil {
+				w.logger.Panicf("can't get txn for key [%s]: %s", string(key), err.Error())
+			}
+
 			value := dsTxn.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
@@ -228,18 +230,61 @@ func (w *worker) doLocalReads(txn *pb.Transaction) ([][]byte, [][]byte) {
 	for idx := range txn.ReadWriteSet {
 		key := txn.ReadWriteSet[idx]
 		if w.cip.IsLocal(key) {
+			dsTxn, err := w.getTxnForKey(key, false)
+			if err != nil {
+				w.logger.Panicf("can't get txn for key [%s]: %s", string(key), err.Error())
+			}
+
 			value := dsTxn.Get(key)
 			localKeys = append(localKeys, key)
 			localValues = append(localValues, value)
 		}
 	}
 
-	err = dsTxn.Rollback()
+	err := w.rollback()
 	if err != nil {
 		w.logger.Panicf("Can't roll back txn: %s", err.Error())
 	}
 
+	w.partitionIDToTxn = nil
 	return localKeys, localValues
+}
+
+func (w *worker) getTxnForKey(key []byte, writable bool) (util.DataStoreTxn, error) {
+	partitionID := w.cip.FindPartitionForKey(key)
+	var txn util.DataStoreTxn
+	var err error
+	var ok bool
+	var txnProvider util.DataStoreTxnProvider
+	txn, ok = w.partitionIDToTxn[partitionID]
+	if !ok {
+		txnProvider, err = w.partitionedStore.GetPartition(partitionID)
+		if err != nil {
+			return nil, err
+		}
+
+		txn, err = txnProvider.StartTxn(writable)
+		if err != nil {
+			return nil, err
+		}
+
+		w.partitionIDToTxn[partitionID] = txn
+	}
+
+	return txn, nil
+}
+
+func (w *worker) rollback() error {
+	defer func() { w.partitionIDToTxn = nil }()
+
+	for _, txn := range w.partitionIDToTxn {
+		err := txn.Rollback()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (w *worker) broadcastLocalReadsToWriterNodes(txn *pb.Transaction, keys [][]byte, values [][]byte, txnID string) {
@@ -287,24 +332,18 @@ func (w *worker) runReadyTxn(execEnv *txnExecEnvironment) {
 
 func (w *worker) runTxn(txn *pb.Transaction, execEnv *txnExecEnvironment, txnID string) error {
 	defer util.TrackTime(w.logger, fmt.Sprintf("runTxn [%s]", txnID), time.Now())
+	lds := newStoredProcDataStore(w.partitionedStore, execEnv.keys, execEnv.values, w.cip)
 
-	dsTxn, err := w.stp.StartTxn(true)
+	err := w.runLua(txn, execEnv, lds)
 	if err != nil {
-		return err
-	}
-
-	lds := newStoredProcDataStore(dsTxn, execEnv.keys, execEnv.values, w.cip)
-
-	err = w.runLua(txn, execEnv, lds)
-	if err != nil {
-		err2 := dsTxn.Rollback()
+		err2 := lds.rollback()
 		if err2 != nil {
 			return fmt.Errorf("%s %s", err.Error(), err2.Error())
 		}
 		return fmt.Errorf("error running lua: %s", err.Error())
 	}
 
-	return dsTxn.Commit()
+	return lds.commit()
 }
 
 func (w *worker) runLua(txn *pb.Transaction, execEnv *txnExecEnvironment, lds *storedProcDataStore) error {

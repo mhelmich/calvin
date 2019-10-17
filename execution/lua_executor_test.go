@@ -34,10 +34,15 @@ func TestLuaExecutorGluar(t *testing.T) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
 
-	lds := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	}, [][]byte{[]byte("hello")}, [][]byte{[]byte("Lua")}, mockCIP)
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	lds := newStoredProcDataStore(mockStore, [][]byte{[]byte("hello")}, [][]byte{[]byte("Lua")}, mockCIP)
 
 	lua.SetGlobal("store", gluar.New(lua, lds))
 	script := `
@@ -114,10 +119,15 @@ func TestLuaExecutorFancy(t *testing.T) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
 
-	store := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	}, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	store := newStoredProcDataStore(mockStore, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
 
 	keys := []string{"narf", "moep"}
 	args := []string{"narf_value", "moep_value"}
@@ -179,10 +189,15 @@ func TestLuaExecutorScriptInvocation(t *testing.T) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
 
-	lds := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	}, execEnv.keys, execEnv.values, mockCIP)
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	lds := newStoredProcDataStore(mockStore, execEnv.keys, execEnv.values, mockCIP)
 
 	procs := &sync.Map{}
 	procs.Store(simpleSetterProcName, simpleSetterProc)
@@ -206,10 +221,15 @@ func TestLuaExecutorProtoBufArg(t *testing.T) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
 
-	store := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	}, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	store := newStoredProcDataStore(mockStore, [][]byte{[]byte("moep"), []byte("narf")}, [][]byte{[]byte("moep_value"), []byte("narf_value")}, mockCIP)
 
 	keys := []string{"narf"}
 	args := []*pb.SimpleSetterArg{
@@ -261,9 +281,16 @@ func TestLuaSubsequentExecutions(t *testing.T) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
-	store := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	},
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
+
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	store := newStoredProcDataStore(
+		mockStore,
 		[][]byte{[]byte("key1"), []byte("key2")},
 		[][]byte{[]byte("value1"), []byte("value2")},
 		mockCIP)
@@ -318,10 +345,15 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 
 	mockCIP := new(mocks.ClusterInfoProvider)
 	mockCIP.On("IsLocal", mock.AnythingOfType("[]uint8")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
 
-	lds := newStoredProcDataStore(&mapDataStoreTxn{
-		m: make(map[string]string),
-	}, execEnv.keys, execEnv.values, mockCIP)
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
+	lds := newStoredProcDataStore(mockStore, execEnv.keys, execEnv.values, mockCIP)
 
 	procs := &sync.Map{}
 	procs.Store(simpleSetterProcName, simpleSetterProc)
@@ -349,29 +381,4 @@ func BenchmarkLuaExecutorScriptInvocation(b *testing.B) {
 	assert.Equal(b, "narf_arg", v)
 	v = lds.Get("moep")
 	assert.Equal(b, "moep_arg", v)
-}
-
-type mapDataStoreTxn struct {
-	m map[string]string
-}
-
-func (ds *mapDataStoreTxn) Get(key []byte) []byte {
-	k := string(key)
-	v := ds.m[k]
-	return []byte(v)
-}
-
-func (ds *mapDataStoreTxn) Set(key []byte, value []byte) error {
-	k := string(key)
-	v := string(value)
-	ds.m[k] = v
-	return nil
-}
-
-func (dt *mapDataStoreTxn) Commit() error {
-	return nil
-}
-
-func (dt *mapDataStoreTxn) Rollback() error {
-	return nil
 }

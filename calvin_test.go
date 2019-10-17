@@ -36,7 +36,9 @@ import (
 func TestCalvinStartStop(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 1)
 	configBag := configBags[0]
-	c := NewCalvin(DefaultOptionsWithFilePaths(configBag.path, ciPath, newDataStore(t, "TestCalvinStartStop")))
+	pds := newPartitionedDataStore(t, "TestCalvinStartStop")
+	opts := defaultOptionsWithFilePaths(configBags[0].path, ciPath).WithDataStore(pds)
+	c := NewCalvin(opts)
 	assert.NotNil(t, c.cc)
 	assert.NotNil(t, c.cip)
 	c.Stop()
@@ -48,7 +50,9 @@ func TestCalvinStartStop(t *testing.T) {
 func TestCalvinPushTxns(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 1)
 	configBag := configBags[0]
-	c := NewCalvin(DefaultOptionsWithFilePaths(configBag.path, ciPath, newDataStore(t, "TestCalvinPushTxns")))
+	pds := newPartitionedDataStore(t, "TestCalvinPushTxns")
+	opts := defaultOptionsWithFilePaths(configBags[0].path, ciPath).WithDataStore(pds)
+	c := NewCalvin(opts)
 
 	for i := 0; i < 10; i++ {
 		id, err := ulid.NewId()
@@ -70,8 +74,12 @@ func TestCalvinPushTxns(t *testing.T) {
 
 func TestCalvinTwoNodes(t *testing.T) {
 	configBags, ciPath := generateNConfigFiles(t, 2)
-	c1 := NewCalvin(DefaultOptionsWithFilePaths(configBags[0].path, ciPath, newDataStore(t, "TestCalvinTwoNodes")))
-	c2 := NewCalvin(DefaultOptionsWithFilePaths(configBags[1].path, ciPath, newDataStore(t, "TestCalvinTwoNodes")))
+	pds1 := newPartitionedDataStore(t, "TestCalvinTwoNodes")
+	opts1 := defaultOptionsWithFilePaths(configBags[0].path, ciPath).WithDataStore(pds1)
+	c1 := NewCalvin(opts1)
+	pds2 := newPartitionedDataStore(t, "TestCalvinTwoNodes")
+	opts2 := defaultOptionsWithFilePaths(configBags[1].path, ciPath).WithDataStore(pds2)
+	c2 := NewCalvin(opts2)
 
 	// f1, err := os.Create("./cmd/calvin.pprof")
 	// assert.Nil(t, err)
@@ -138,8 +146,8 @@ func __TestCalvinThreeNodes(t *testing.T) {
 	os.RemoveAll("./cmd/calvin-2")
 	os.RemoveAll("./cmd/calvin-3")
 
-	c1 := NewCalvin(DefaultOptionsWithFilePaths("./cmd/config_1.toml", "./cmd/cluster_info.toml", newDataStore(t, "__TestCalvinThreeNodes")))
-	c2 := NewCalvin(DefaultOptionsWithFilePaths("./cmd/config_2.toml", "./cmd/cluster_info.toml", newDataStore(t, "__TestCalvinThreeNodes")))
+	c1 := NewCalvin(defaultOptionsWithFilePaths("./cmd/config_1.toml", "./cmd/cluster_info.toml"))
+	c2 := NewCalvin(defaultOptionsWithFilePaths("./cmd/config_2.toml", "./cmd/cluster_info.toml"))
 
 	for i := 0; i < 100; i++ {
 		id, err := ulid.NewId()
@@ -169,7 +177,7 @@ func __TestCalvinThreeNodes(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	c3 := NewCalvin(DefaultOptionsWithFilePaths("./cmd/config_3.toml", "./cmd/cluster_info.toml", newDataStore(t, "__TestCalvinThreeNodes")))
+	c3 := NewCalvin(defaultOptionsWithFilePaths("./cmd/config_3.toml", "./cmd/cluster_info.toml"))
 
 	for i := 0; i < 100; i++ {
 		id, err := ulid.NewId()
@@ -354,7 +362,7 @@ func generateNConfigFiles(t *testing.T, n int) ([]configBag, string) {
 		ci.Nodes[idx] = templateInputNode{
 			ID:         ids[idx],
 			Port:       ports[idx],
-			Partitions: []string{strconv.Itoa(idx * 3), strconv.Itoa((idx * 3) + 1), strconv.Itoa((idx * 3) + 2)},
+			Partitions: []string{strconv.Itoa((idx * 3) + 1), strconv.Itoa((idx * 3) + 2), strconv.Itoa((idx * 3) + 3)},
 		}
 	}
 
@@ -383,10 +391,10 @@ func removeIdx(ids []uint64, idx int) []uint64 {
 	return append(ids[:idx], ids[idx+1:]...)
 }
 
-func newDataStore(t *testing.T, testName string) util.DataStoreTxnProvider {
+func newPartitionedDataStore(t *testing.T, testName string) util.PartitionedDataStore {
 	baseDir := fmt.Sprintf("./test-%s-%d/", testName, util.RandomRaftId())
 	err := os.MkdirAll(baseDir, os.ModePerm)
 	assert.Nil(t, err)
 	logger := log.WithFields(log.Fields{})
-	return newBoltDataStore(baseDir, logger)
+	return newPartitionedBoltStore(baseDir, logger)
 }

@@ -83,13 +83,21 @@ func NewCalvin(opts Options) *Calvin {
 	doneTxnChan := make(chan *pb.Transaction, goodChannelSize)
 	sched := scheduler.NewScheduler(txnBatchChan, readyTxnChan, doneTxnChan, srvr, logger)
 
+	// init partitions we know about now
+	for _, partitionID := range opts.clusterInfoProvider.MyPartitions() {
+		_, err := opts.partitionedDataStore.CreatePartition(partitionID)
+		if err != nil {
+			logger.Panicf("can't create partition with id [%d]: %s", partitionID, err.Error())
+		}
+	}
+
 	engineOpts := execution.EngineOpts{
 		ScheduledTxnChan: readyTxnChan,
 		DoneTxnChan:      doneTxnChan,
-		Stp:              opts.dataStore,
 		Srvr:             srvr,
 		ConnCache:        cc,
 		Cip:              opts.clusterInfoProvider,
+		PartitionedStore: opts.partitionedDataStore,
 		NumWorkers:       numWorkerThreads,
 		Logger:           logger,
 	}
@@ -98,34 +106,34 @@ func NewCalvin(opts Options) *Calvin {
 	go srvr.Serve(lis)
 
 	return &Calvin{
-		cc:           cc,
-		cip:          opts.clusterInfoProvider,
-		seq:          seq,
-		sched:        sched,
-		engine:       engine,
-		grpcSrvr:     srvr,
-		dataStore:    opts.dataStore,
-		txnBatchChan: txnBatchChan,
-		readyTxnChan: readyTxnChan,
-		doneTxnChan:  doneTxnChan,
-		logger:       logger,
-		myRaftID:     opts.raftID,
+		cc:                 cc,
+		cip:                opts.clusterInfoProvider,
+		seq:                seq,
+		sched:              sched,
+		engine:             engine,
+		grpcSrvr:           srvr,
+		partitionDataStore: opts.partitionedDataStore,
+		txnBatchChan:       txnBatchChan,
+		readyTxnChan:       readyTxnChan,
+		doneTxnChan:        doneTxnChan,
+		logger:             logger,
+		myRaftID:           opts.raftID,
 	}
 }
 
 type Calvin struct {
-	cip          util.ClusterInfoProvider
-	cc           util.ConnectionCache
-	seq          *sequencer.Sequencer
-	sched        *scheduler.Scheduler
-	engine       *execution.Engine
-	grpcSrvr     *grpc.Server
-	dataStore    util.DataStoreTxnProvider
-	txnBatchChan chan *pb.TransactionBatch
-	readyTxnChan chan *pb.Transaction
-	doneTxnChan  chan *pb.Transaction
-	logger       *log.Entry
-	myRaftID     uint64
+	cip                util.ClusterInfoProvider
+	cc                 util.ConnectionCache
+	seq                *sequencer.Sequencer
+	sched              *scheduler.Scheduler
+	engine             *execution.Engine
+	grpcSrvr           *grpc.Server
+	partitionDataStore util.PartitionedDataStore
+	txnBatchChan       chan *pb.TransactionBatch
+	readyTxnChan       chan *pb.Transaction
+	doneTxnChan        chan *pb.Transaction
+	logger             *log.Entry
+	myRaftID           uint64
 }
 
 func (c *Calvin) Stop() {
@@ -133,7 +141,7 @@ func (c *Calvin) Stop() {
 	c.grpcSrvr.Stop()
 	c.seq.Stop()
 	time.Sleep(time.Second)
-	c.dataStore.Close()
+	c.partitionDataStore.Close()
 }
 
 func (c *Calvin) SubmitTransaction(txn *pb.Transaction) {

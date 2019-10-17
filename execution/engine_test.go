@@ -34,14 +34,6 @@ import (
 func TestEngineBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
 	doneTxnChan := make(chan *pb.Transaction)
-	mockTXN := new(mocks.DataStoreTxn)
-	mockTXN.On("Rollback").Return(nil)
-	mockTXN.On("Commit").Return(nil)
-	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
-		func(b []byte) []byte { return []byte(string(b) + "_value") },
-	)
-	mockDS := new(mocks.DataStoreTxnProvider)
-	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 	srvr := grpc.NewServer()
 
 	mockRRC := new(mocks.RemoteReadClient)
@@ -71,11 +63,22 @@ func TestEngineBasic(t *testing.T) {
 		func(b []byte) bool { return "narf" == string(b) || "moep" == string(b) },
 	)
 	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
+
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Get", mock.AnythingOfType("[]uint8")).Return(
+		func(b []byte) []byte { return []byte(string(b) + "_value") },
+	)
+	mockTxn.On("Rollback").Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
 
 	opts := EngineOpts{
 		ScheduledTxnChan: scheduledTxnChan,
 		DoneTxnChan:      doneTxnChan,
-		Stp:              mockDS,
+		PartitionedStore: mockStore,
 		Srvr:             srvr,
 		ConnCache:        mockCC,
 		Cip:              mockCIP,
@@ -100,14 +103,6 @@ func TestWorkerBasic(t *testing.T) {
 	scheduledTxnChan := make(chan *pb.Transaction)
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
 	doneTxnChan := make(chan *pb.Transaction)
-	mockTXN := new(mocks.DataStoreTxn)
-	mockTXN.On("Rollback").Return(nil)
-	mockTXN.On("Commit").Return(nil)
-	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
-		func(b []byte) []byte { return []byte(string(b) + "_value") },
-	)
-	mockDS := new(mocks.DataStoreTxnProvider)
-	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
 
 	mockRRC := new(mocks.RemoteReadClient)
 	mockRRC.On("RemoteRead", mock.Anything, mock.AnythingOfType("*pb.RemoteReadRequest")).Run(
@@ -136,6 +131,16 @@ func TestWorkerBasic(t *testing.T) {
 		func(b []byte) bool { return "narf" == string(b) || "moep" == string(b) },
 	)
 	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
+
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Get", mock.AnythingOfType("[]uint8")).Return(
+		func(b []byte) []byte { return []byte(string(b) + "_value") },
+	)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
 
 	txnsToExecute := &sync.Map{}
 	logger := log.WithFields(log.Fields{})
@@ -147,7 +152,7 @@ func TestWorkerBasic(t *testing.T) {
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
 		doneTxnChan:         doneTxnChan,
-		stp:                 mockDS,
+		partitionedStore:    mockStore,
 		connCache:           mockCC,
 		cip:                 mockCIP,
 		txnsToExecute:       txnsToExecute,
@@ -184,16 +189,6 @@ func TestWorkerSimpleSetter(t *testing.T) {
 	readyToExecChan := make(chan *txnExecEnvironment, 1)
 	doneTxnChan := make(chan *pb.Transaction)
 
-	mockTXN := new(mocks.DataStoreTxn)
-	mockTXN.On("Rollback").Return(nil)
-	mockTXN.On("Commit").Return(nil)
-	mockTXN.On("Get", mock.AnythingOfType("[]uint8")).Return(
-		func(b []byte) []byte { return []byte(string(b) + "_value") },
-	)
-	mockTXN.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
-	mockDS := new(mocks.DataStoreTxnProvider)
-	mockDS.On("StartTxn", mock.AnythingOfType("bool")).Return(mockTXN, nil)
-
 	mockRRC := new(mocks.RemoteReadClient)
 	mockRRC.On("RemoteRead", mock.Anything, mock.AnythingOfType("*pb.RemoteReadRequest")).Run(
 		func(args mock.Arguments) {
@@ -221,6 +216,15 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		func(b []byte) bool { return "narf" == string(b) || "moep" == string(b) },
 	)
 	mockCIP.On("AmIWriter", mock.AnythingOfType("[]uint64")).Return(true)
+	mockCIP.On("FindPartitionForKey", mock.AnythingOfType("[]uint8")).Return(1)
+
+	mockTxn := new(mocks.DataStoreTxn)
+	mockTxn.On("Set", mock.AnythingOfType("[]uint8"), mock.AnythingOfType("[]uint8")).Return(nil)
+	mockTxn.On("Commit").Return(nil)
+	mockTxnProvider := new(mocks.DataStoreTxnProvider)
+	mockTxnProvider.On("StartTxn", true).Return(mockTxn, nil)
+	mockStore := new(mocks.PartitionedDataStore)
+	mockStore.On("GetPartition", mock.AnythingOfType("int")).Return(mockTxnProvider, nil)
 
 	txnsToExecute := &sync.Map{}
 	logger := log.WithFields(log.Fields{})
@@ -233,9 +237,9 @@ func TestWorkerSimpleSetter(t *testing.T) {
 		scheduledTxnChan:    scheduledTxnChan,
 		readyToExecChan:     readyToExecChan,
 		doneTxnChan:         doneTxnChan,
-		stp:                 mockDS,
 		connCache:           mockCC,
 		cip:                 mockCIP,
+		partitionedStore:    mockStore,
 		txnsToExecute:       txnsToExecute,
 		storedProcs:         procs,
 		compiledStoredProcs: make(map[string]*glua.LFunction),

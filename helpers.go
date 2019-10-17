@@ -38,7 +38,7 @@ func NewTransaction() *pb.Transaction {
 	}
 }
 
-func DefaultOptionsWithFilePaths(configPath string, clusterInfoPath string, dataStore util.DataStoreTxnProvider) Options {
+func defaultOptionsWithFilePaths(configPath string, clusterInfoPath string) Options {
 	cfg := readConfig(configPath)
 	cip := util.NewClusterInfoProvider(cfg.RaftID, clusterInfoPath)
 	return Options{
@@ -47,7 +47,6 @@ func DefaultOptionsWithFilePaths(configPath string, clusterInfoPath string, data
 		raftID:              cfg.RaftID,
 		peers:               cfg.Peers,
 		clusterInfoProvider: cip,
-		dataStore:           dataStore,
 	}
 }
 
@@ -68,7 +67,6 @@ type Options struct {
 	raftID               uint64
 	peers                []uint64
 	clusterInfoProvider  util.ClusterInfoProvider
-	dataStore            util.DataStoreTxnProvider
 	snapshotHandler      sequencer.SnapshotHandler
 	partitionedDataStore util.PartitionedDataStore
 	numWorkers           int

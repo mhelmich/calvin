@@ -67,7 +67,8 @@ func (c *cip) FindOwnerForKey(key []byte) uint64 {
 }
 
 func (c *cip) FindPartitionForKey(key []byte) int {
-	return c.hashKeyToPartition(key)
+	// paritions are one-based
+	return c.hashKeyToPartition(key) + 1
 }
 
 func (c *cip) MyPartitions() []int {

@@ -21,7 +21,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func newStoredProcDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byte, cip util.ClusterInfoProvider) *storedProcDataStore {
+func newStoredProcDataStore(partitionedStore util.PartitionedDataStore, keys [][]byte, values [][]byte, cip util.ClusterInfoProvider) *storedProcDataStore {
 	m := make(map[string][]byte, len(keys))
 
 	for idx := range keys {
@@ -31,16 +31,18 @@ func newStoredProcDataStore(txn util.DataStoreTxn, keys [][]byte, values [][]byt
 	}
 
 	return &storedProcDataStore{
-		txn:  txn,
-		data: m,
-		cip:  cip,
+		partitionedStore: partitionedStore,
+		txns:             make(map[int]util.DataStoreTxn),
+		data:             m,
+		cip:              cip,
 	}
 }
 
 type storedProcDataStore struct {
-	txn  util.DataStoreTxn
-	data map[string][]byte
-	cip  util.ClusterInfoProvider
+	partitionedStore util.PartitionedDataStore
+	txns             map[int]util.DataStoreTxn
+	data             map[string][]byte
+	cip              util.ClusterInfoProvider
 }
 
 func (lds *storedProcDataStore) Get(key string) string {
@@ -64,5 +66,54 @@ func (lds *storedProcDataStore) Set(key string, value string) {
 		log.Panicf("you tried to access key [%s] but wasn't in the keys declared to be accessed", key)
 	}
 
-	lds.txn.Set([]byte(key), []byte(value))
+	txn, err := lds.getTxnForKey([]byte(key))
+	if err != nil {
+		log.Panicf("can't get txn for key [%s]: %s", key, err.Error())
+	}
+
+	txn.Set([]byte(key), []byte(value))
+}
+
+func (lds *storedProcDataStore) getTxnForKey(key []byte) (util.DataStoreTxn, error) {
+	partitionID := lds.cip.FindPartitionForKey(key)
+	txn, ok := lds.txns[partitionID]
+	if !ok {
+		var txnProvider util.DataStoreTxnProvider
+		var err error
+
+		txnProvider, err = lds.partitionedStore.GetPartition(partitionID)
+		if err != nil {
+			return nil, err
+		}
+
+		txn, err = txnProvider.StartTxn(true)
+		if err != nil {
+			return nil, err
+		}
+
+		lds.txns[partitionID] = txn
+	}
+	return txn, nil
+}
+
+func (lds *storedProcDataStore) commit() error {
+	defer func() { lds.txns = nil }()
+	for _, txn := range lds.txns {
+		err := txn.Commit()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (lds *storedProcDataStore) rollback() error {
+	defer func() { lds.txns = nil }()
+	for _, txn := range lds.txns {
+		err := txn.Rollback()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

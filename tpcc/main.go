@@ -41,9 +41,9 @@ func main() {
 	cfg := readConfig(cfgFile)
 
 	storeDir := fmt.Sprintf("%s%d", cfg.StorePath, cfg.RaftID)
-	dataStore := newPartitionedBadgerStore(storeDir, logger)
+	partionedDataStore := newPartitionedBadgerStore(storeDir, logger)
 	cip := util.NewClusterInfoProvider(cfg.RaftID, "./cluster_info.toml")
-	calvinOpts := calvin.DefaultOptions(dataStore, cip).WithPort(cfg.Port).WithRaftID(cfg.RaftID).WithPeers(cfg.Peers).WithStorePath(cfg.StorePath)
+	calvinOpts := calvin.DefaultOptions(partionedDataStore, cip).WithPort(cfg.Port).WithRaftID(cfg.RaftID).WithPeers(cfg.Peers).WithStorePath(cfg.StorePath)
 	c := calvin.NewCalvin(calvinOpts)
 
 	sig := make(chan os.Signal, 1)
